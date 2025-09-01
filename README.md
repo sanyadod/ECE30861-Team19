@@ -2,5 +2,5 @@
 ECE 30861
 Sanya Dod, 
 Spoorthi Koppula,
-Suhani Mathur,
-Romita Pakrasi
+Romita Pakrasi, 
+Suhani Mathur
