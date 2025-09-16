@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [ "${1:-}" = "install" ]; then
   # Use --user to avoid system-wide install in grading environment
-  python3 -m pip install --user -r requirements.txt
+  python3 -m pip install -r requirements.txt
   exit 0
 fi
 
