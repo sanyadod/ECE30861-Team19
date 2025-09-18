@@ -1,5 +1,5 @@
 """
-URL parsing and categorization logic.
+URL parsing and categorization logic
 """
 import re
 from typing import List, Dict, Optional

@@ -1,5 +1,5 @@
 """
-Hugging Face Hub API integration.
+Hugging Face Hub API integration
 """
 import os
 import json

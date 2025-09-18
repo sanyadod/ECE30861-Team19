@@ -1,5 +1,5 @@
 """
-Data models for acme-model-auditor.
+Data models
 """
 from typing import Dict, Optional, Any
 from enum import Enum

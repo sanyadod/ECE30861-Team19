@@ -1,5 +1,5 @@
 """
-Logging utilities for acme-model-auditor.
+Logging utilities 
 """
 import logging
 import os

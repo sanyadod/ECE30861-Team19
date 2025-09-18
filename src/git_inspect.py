@@ -1,5 +1,5 @@
 """
-Git repository inspection using Dulwich (pure Python).
+Git repository inspection 
 """
 import os
 import tempfile

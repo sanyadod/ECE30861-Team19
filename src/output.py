@@ -1,5 +1,5 @@
 """
-NDJSON output system for acme-model-auditor.
+NDJSON output system.
 """
 import json
 import sys
