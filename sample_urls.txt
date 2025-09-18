@@ -1,0 +1,3 @@
+https://huggingface.co/datasets/squad
+https://github.com/huggingface/transformers
+https://huggingface.co/google/bert_uncased_L-4_H-256_A-4

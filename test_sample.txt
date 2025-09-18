@@ -1,0 +1,3 @@
+https://huggingface.co/datasets/imdb
+https://github.com/microsoft/DialoGPT
+https://huggingface.co/microsoft/DialoGPT-small
