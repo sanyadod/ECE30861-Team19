@@ -14,7 +14,7 @@ from .output import NDJSONOutputter
 from .logging_utils import setup_logging, get_logger
 
 
-app = typer.Typer(help="Model Auditor - Audit ML models with quality metrics")
+app = typer.Typer(help="Audit ML models with quality metrics")
 
 
 def process_urls(url_file: str) -> None:
