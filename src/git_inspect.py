@@ -23,7 +23,7 @@ class GitInspector:
     """Git repository inspector using Dulwich."""
     
     def __init__(self, cache_dir: Optional[str] = None):
-        self.cache_dir = cache_dir or tempfile.mkdtemp(prefix="acme_git_cache_")
+        self.cache_dir = cache_dir or tempfile.mkdtemp(prefix="src_git_cache_")
         os.makedirs(self.cache_dir, exist_ok=True)
     
     def clone_repo(self, repo_url: ParsedURL) -> Optional[str]:

@@ -1,5 +1,5 @@
 """
-Main CLI application for acme-model-auditor.
+Main CLI application
 """
 import sys
 import asyncio
@@ -14,7 +14,7 @@ from .output import NDJSONOutputter
 from .logging_utils import setup_logging, get_logger
 
 
-app = typer.Typer(help="ACME Model Auditor - Audit ML models with quality metrics")
+app = typer.Typer(help="Model Auditor - Audit ML models with quality metrics")
 
 
 def process_urls(url_file: str) -> None:
