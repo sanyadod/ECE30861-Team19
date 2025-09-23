@@ -6,6 +6,7 @@ import asyncio
 import subprocess
 from pathlib import Path
 from typing import List
+import re
 
 import typer
 from .urls import build_model_contexts
@@ -22,9 +23,12 @@ def process_urls(url_file: str) -> None:
     logger = setup_logging()
     
     try:
-        # Read URLs from file
+        # Read URLs from file (support comma and/or whitespace separated entries)
         with open(url_file, 'r') as f:
-            urls = [line.strip() for line in f if line.strip()]
+            content = f.read()
+            # Split on commas and whitespace, then strip
+            tokens = [token.strip() for token in re.split(r'[\s,]+', content) if token.strip()]
+            urls = tokens
         
         if not urls:
             logger.error("No URLs found in file")
