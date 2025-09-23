@@ -1,96 +1,142 @@
-from __future__ import annotations
-
+"""
+Code quality metric - evaluates linked code repositories for quality indicators.
+"""
 from typing import Dict, Any
-from ..models import ModelContext, MetricResult
-from ..logging_utils import get_logger
+from ..models import MetricResult, ModelContext
 from ..utils import measure_time
-
-logger = get_logger()
-
-
-def _normalize(v: float, lo: float, hi: float) -> float:
-    if hi <= lo:
-        return 0.0
-    x = (v - lo) / (hi - lo)
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return x
+from ..git_inspect import GitInspector
+from .base import BaseMetric
 
 
-async def _score_from_repo_analysis(analysis: Dict[str, Any]) -> float:
-    # Defaults if analysis sections are missing
-    file_analysis = analysis.get("file_analysis", {}) or {}
-    structure = analysis.get("structure_analysis", {}) or {}
-    docs = analysis.get("documentation_analysis", {}) or {}
-
-    python_files = int(file_analysis.get("python_files", 0))
-    test_files = int(file_analysis.get("test_files", 0))
-    test_ratio = float(file_analysis.get("test_coverage_estimate", 0.0))
-    total_files = int(file_analysis.get("total_files", 0))
-
-    structure_score = float(structure.get("structure_score", 0.0))
-    documentation_score = float(docs.get("documentation_score", 0.0))
-    readme_length = int(docs.get("readme_length", 0))
-
-    # Heuristics:
-    # - structure_score (0..1) weight 0.35
-    # - documentation_score (0..1) weight 0.25
-    # - test_ratio (0..1) weight 0.25
-    # - readme_length normalized by cap 2,000 chars weight 0.15
-    readme_norm = _normalize(readme_length, 0, 2000)
-
-    weights = {
-        "structure": 0.35,
-        "docs": 0.25,
-        "tests": 0.25,
-        "readme": 0.15,
-    }
-
-    score = (
-        structure_score * weights["structure"]
-        + documentation_score * weights["docs"]
-        + test_ratio * weights["tests"]
-        + readme_norm * weights["readme"]
-    )
-
-    return max(0.0, min(1.0, score))
-
-
-class CodeQualityMetric:
-
-    name = "code_quality"
-
-    async def compute(self, context: ModelContext) -> MetricResult:
-        # If no code repos are associated, return 0 quickly
-        if not context.code_repos:
-            with measure_time() as get_latency:
-                score = 0.0
-            return MetricResult(score=score, latency=get_latency())
-
-        # Expect another layer to have attached analysis; but if not, score 0
-        # The Git analysis is performed elsewhere to avoid network in metrics.
-        # Here, look for an attached attribute placed by the scorer like:
-        # context.extra["code_repo_analysis"][repo_name] = analysis_dict
-        analyses = getattr(context, "extra", {}).get("code_repo_analysis", {})
-        if not analyses:
-            with measure_time() as get_latency:
-                score = 0.0
-            return MetricResult(score=score, latency=get_latency())
-
-        # Aggregate multiple repos: take the best quality as representative,
-        # or average—use average to be conservative.
+class CodeQualityMetric(BaseMetric):
+    """Metric for evaluating quality of linked code repositories."""
+    
+    @property
+    def name(self) -> str:
+        return "code_quality"
+    
+    async def compute(self, context: ModelContext, config: Dict[str, Any]) -> MetricResult:
+        """Compute code quality score."""
         with measure_time() as get_latency:
-            repo_scores = []
-            for repo_key, analysis in analyses.items():
-                try:
-                    s = await _score_from_repo_analysis(analysis)
-                    repo_scores.append(s)
-                except Exception as e:
-                    logger.debug(f"Error scoring repo {repo_key}: {e}")
-                    repo_scores.append(0.0)
-
-            score = sum(repo_scores) / len(repo_scores) if repo_scores else 0.0
-
-        return MetricResult(score=max(0.0, min(1.0, score)), latency=get_latency())
+            score = await self._calculate_code_quality_score(context, config)
+        
+        return MetricResult(score=score, latency=get_latency())
+    
+    async def _calculate_code_quality_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
+        """Calculate code quality based on repository analysis."""
+        if not context.code_repos:
+            return 0.4  # Default medium score when no code is linked
+        
+        thresholds = config.get('thresholds', {}).get('code_quality', {})
+        
+        total_score = 0.0
+        repos_analyzed = 0
+        
+        git_inspector = GitInspector()
+        
+        try:
+            for code_repo in context.code_repos:
+                if code_repo.platform == "github":
+                    repo_path = git_inspector.clone_repo(code_repo)
+                    if repo_path:
+                        repo_score = self._analyze_code_repository(repo_path, git_inspector, thresholds)
+                        total_score += repo_score
+                        repos_analyzed += 1
+                        break  # Analyze first available repo for efficiency
+        finally:
+            git_inspector.cleanup()
+        
+        if repos_analyzed == 0:
+            return 0.3  # Low score if no repos could be analyzed
+        
+        return total_score / repos_analyzed
+    
+    def _analyze_code_repository(self, repo_path: str, inspector: GitInspector, thresholds: Dict[str, Any]) -> float:
+        """Analyze a code repository for quality indicators."""
+        analysis = inspector.analyze_repository(repo_path)
+        
+        score = 0.0
+        
+        # Repository structure quality (25% of score)
+        structure_analysis = analysis.get('structure_analysis', {})
+        structure_score = structure_analysis.get('structure_score', 0.0)
+        score += structure_score * 0.25
+        
+        # Documentation quality (25% of score)
+        doc_analysis = analysis.get('documentation_analysis', {})
+        doc_score = doc_analysis.get('documentation_score', 0.0)
+        score += doc_score * 0.25
+        
+        # File organization quality (25% of score)
+        file_analysis = analysis.get('file_analysis', {})
+        file_score = self._calculate_file_quality_score(file_analysis, thresholds)
+        score += file_score * 0.25
+        
+        # Commit quality (25% of score)
+        commit_analysis = analysis.get('commit_analysis', {})
+        commit_score = self._calculate_commit_quality_score(commit_analysis)
+        score += commit_score * 0.25
+        
+        return min(1.0, score)
+    
+    def _calculate_file_quality_score(self, file_analysis: Dict[str, Any], thresholds: Dict[str, Any]) -> float:
+        """Calculate score based on file structure and organization."""
+        score = 0.0
+        
+        python_files = file_analysis.get('python_files', 0)
+        test_files = file_analysis.get('test_files', 0)
+        total_lines = file_analysis.get('total_lines_of_code', 0)
+        
+        # Test coverage estimate (based on test file ratio)
+        if python_files > 0:
+            test_ratio = test_files / python_files
+            min_coverage = thresholds.get('min_test_coverage', 0.5)
+            
+            if test_ratio >= min_coverage:
+                score += 0.4
+            elif test_ratio >= min_coverage * 0.5:
+                score += 0.2
+        
+        # Code organization (reasonable file count and LOC)
+        if 10 <= python_files <= 100:  # Reasonable project size
+            score += 0.3
+        elif python_files > 0:
+            score += 0.1
+        
+        # Lines of code reasonableness
+        if 1000 <= total_lines <= 50000:  # Reasonable LOC
+            score += 0.3
+        elif total_lines > 0:
+            score += 0.1
+        
+        return score
+    
+    def _calculate_commit_quality_score(self, commit_analysis: Dict[str, Any]) -> float:
+        """Calculate score based on commit history quality."""
+        score = 0.0
+        
+        total_commits = commit_analysis.get('total_commits', 0)
+        recent_commits = commit_analysis.get('recent_commits', 0)
+        avg_frequency = commit_analysis.get('avg_commit_frequency', 0)
+        
+        # Regular commit activity
+        if total_commits >= 20:
+            score += 0.3
+        elif total_commits >= 5:
+            score += 0.2
+        elif total_commits >= 1:
+            score += 0.1
+        
+        # Recent activity
+        if recent_commits >= 5:
+            score += 0.3
+        elif recent_commits >= 1:
+            score += 0.2
+        
+        # Commit frequency (commits per day)
+        if avg_frequency >= 0.1:  # At least 1 commit per 10 days
+            score += 0.4
+        elif avg_frequency > 0:
+            score += 0.2
+        
+        return score
