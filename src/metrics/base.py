@@ -1,25 +1,24 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Tuple
-from ..models import ModelContext, MetricResult
-from ..utils import measure_time
-from ..logging_utils import get_logger
+from typing import Dict, Any
+from ..models import MetricResult, ModelContext
 
-logger = get_logger()
-
-
-class Metric(ABC):
-
-    name: str
-
+#base class for all metrics
+class BaseMetric(ABC):
+    
+    @property
     @abstractmethod
-    async def compute(self, context: ModelContext) -> MetricResult:
-        
-        raise NotImplementedError
-
-    async def _timed(self, fn, *args, **kwargs) -> Tuple[float, int]:
-        with measure_time() as get_latency:
-            value = await fn(*args, **kwargs)
-            latency_ms = get_latency()
-        return value, latency_ms
+    def name(self) -> str:
+        pass
+    
+    @abstractmethod
+    async def compute(self, context: ModelContext, config: Dict[str, Any]) -> MetricResult:
+        """
+        Compute the metric score for a model context.
+        Arguments:
+            context: Model context with associated data
+            config: Configuration dictionary with weights and thresholds
+            
+        Returns:
+            MetricResult with score (0-1) and latency (ms)
+        """
+        pass
