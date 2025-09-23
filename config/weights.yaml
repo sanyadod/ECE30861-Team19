@@ -1,0 +1,62 @@
+metric_weights:
+  ramp_up_time: 0.15        # Weight for ease of getting started
+  bus_factor: 0.10          # Weight for contributor diversity
+  performance_claims: 0.15  # Weight for documented performance
+  license: 0.10             # Weight for license compatibility
+  size_score: 0.15          # Weight for deployment feasibility
+  dataset_and_code_score: 0.15  # Weight for linked resources
+  dataset_quality: 0.10     # Weight for dataset documentation
+  code_quality: 0.10        # Weight for code structure and quality
+
+# Thresholds and parameters for individual metrics
+thresholds:
+  # Ramp-up time metric
+  ramp_up:
+    readme_sections: ["usage", "quickstart", "examples", "installation"]
+    example_code_bonus: 0.2
+    
+  # Bus factor metric
+  bus_factor:
+    min_contributors: 3
+    recent_commits_window_days: 90
+    single_contributor_penalty: 0.5
+    
+  # Performance claims metric
+  performance:
+    benchmark_keywords: ["glue", "mmlu", "hellaswag", "arc", "truthfulqa", "winogrande"]
+    citation_bonus: 0.2
+    numeric_results_bonus: 0.3
+    
+  # License scoring
+  license:
+    compatible_licenses: ["apache-2.0", "mit", "bsd-3-clause", "bsd-2-clause", "lgpl-2.1"]
+    restrictive_penalty: 0.3
+    missing_penalty: 0.7
+    
+  # Size scoring thresholds (in GB)
+  size_limits:
+    raspberry_pi: 2.0     # Models under 2GB get full score
+    jetson_nano: 8.0      # Models under 8GB get full score
+    desktop_pc: 32.0      # Models under 32GB get full score
+    aws_server: 128.0     # Models under 128GB get full score
+    
+  # Dataset and code scoring
+  dataset_code:
+    dataset_link_bonus: 0.4
+    code_example_bonus: 0.3
+    both_present_bonus: 0.3
+    
+  # Dataset quality checklist
+  dataset_quality_checklist:
+    - "description"
+    - "license" 
+    - "splits"
+    - "size"
+    - "known_issues"
+    - "ethics"
+    
+  # Code quality thresholds
+  code_quality:
+    max_flake8_issues: 50
+    min_test_coverage: 0.5
+    typing_ratio_threshold: 0.3

@@ -1,57 +1,69 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3
+"""
+Executable entry point
+"""
+import sys
+import os
+import subprocess
+from pathlib import Path
 
-if [ "${1:-}" = "install" ]; then
-  # Use --user to avoid system-wide install in grading environment
-  python3 -m pip install -r requirements.txt
-  exit 0
-fi
+# Add the project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-if [ "${1:-}" = "test" ]; then
-  # Run pytest with coverage and summarize results as required
-  # Generate coverage report and parse counts
-  pytest -q --maxfail=1 --disable-warnings || exit 1
-  # Count tests and coverage using pytest-cov output
-  # The below uses pytest-cov plugin to create coverage.xml or terminal output.
-  # Simpler: run pytest and then use coverage to get line coverage percentage
-  # (Assumes pytest configured to produce coverage)
-  # Print a simple summary (pytest prints counts, but the grader expects a specific format)
-  # We'll approximate: count passed tests from pytest output by rerunning with --last-failed not necessary
-  # Simpler approach: use python to parse pytest collection
-  python3 - <<'PY'
-import pytest, sys, re, json, subprocess
-# Run pytest and capture output to count test cases
-p = subprocess.run(["pytest", "-q", "--disable-warnings"], capture_output=True, text=True)
-out = p.stdout + p.stderr
-# Try to extract "X passed" or "Y passed" line
-m = re.search(r"(\d+)\s+passed", out)
-passed = int(m.group(1)) if m else 0
-m2 = re.search(r"(\d+)\s+failed", out)
-failed = int(m2.group(1)) if m2 else 0
-total = passed + failed
-# coverage via coverage run & report
-cov = subprocess.run(["coverage", "run", "-m", "pytest"], capture_output=True, text=True)
-rep = subprocess.run(["coverage", "report", "-m"], capture_output=True, text=True)
-# Extract total line coverage (last line with "TOTAL")
-total_line = "0.0"
-for L in rep.stdout.splitlines():
-    if L.strip().startswith("TOTAL"):
-        parts = L.split()
-        if len(parts) >= 4:
-            total_line = parts[3].strip().rstrip('%')
-            break
-print(f"{passed}/{total} test cases passed. {total_line}% line coverage achieved.")
-sys.exit(0 if failed==0 else 1)
-PY
-  exit $?
-fi
+def main():
+    """Main entry point for the CLI."""
+    if len(sys.argv) < 2:
+        print("Usage: ./run <command>")
+        print("Commands:")
+        print("  install        - Install dependencies")
+        print("  test          - Run test suite")
+        print("  <URL_FILE>    - Process URLs from file")
+        sys.exit(1)
+    
+    command = sys.argv[1]
+    
+    if command == "install":
+        # Install dependencies in userland
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--user", 
+                "-r", str(project_root / "requirements.txt")
+            ])
+            print("Dependencies installed successfully.")
+            sys.exit(0)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install dependencies: {e}")
+            sys.exit(1)
+    
+    elif command == "test":
+        # Run test suite
+        try:
+            from src.cli import run_tests
+            run_tests()
+        except ImportError as e:
+            print(f"Failed to import test module: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Test execution failed: {e}")
+            sys.exit(1)
+    
+    else:
+        # Treat as URL file path
+        url_file = Path(command)
+        if not url_file.exists():
+            print(f"Error: URL file '{url_file}' does not exist.")
+            sys.exit(1)
+        
+        try:
+            from src.cli import process_urls
+            process_urls(str(url_file.absolute()))
+        except ImportError as e:
+            print(f"Failed to import CLI module: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"URL processing failed: {e}")
+            sys.exit(1)
 
-# Default: treat arg1 as URL file
-URL_FILE="$1"
-if [ -z "$URL_FILE" ]; then
-  echo "Usage: ./run install | ./run test | ./run URL_FILE" >&2
-  exit 1
-fi
-
-python3 -m src.cli "$URL_FILE"
-exit $?
+if __name__ == "__main__":
+    main()
