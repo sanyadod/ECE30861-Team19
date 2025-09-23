@@ -1,84 +1,72 @@
-# to measure : is it clearly referencing a dataset, does the repo include runnable example code
-# scoring: dataset_and_code_score = 0.5 * has_dataset + 0.5 * has_example_code
-#          dataset_and_code_score_latency = time to compute (ms)
+"""
+Dataset and code score metric - evaluates linked training data and example code.
+"""
+from typing import Dict, Any
+from ..models import MetricResult, ModelContext
+from ..utils import measure_time
+from .base import BaseMetric
 
-from __future__ import annotations
 
-import re
-import time
-from pathlib import Path
-from typing import Optional
-
-from models import MetricResult
-
-_DATASET_URL_RE = re.compile(
-    r"https?://huggingface\.co/datasets/[A-Za-z0-9_.\-/]+",
-    re.IGNORECASE,
-)
-
-class DatasetAndCodeAvailabilityMetric:
-    NAME = "dataset_and_code_score"
-
-    def _has_dataset_link(
-        self,
-        readme_text: str,
-        model_index_json: Optional[dict],
-    ) -> bool:
-        """
-        Returns True if any reasonable signal of a dataset reference is found.
-        Signals (any one is enough):
-          1) model_index.json contains 'dataset'/'datasets'
-          2) README has explicit HF dataset URL
-          3) README mentions dataset-like keywords
-        """
-        if model_index_json:
-            blob = str(model_index_json).lower()
-            if "dataset" in blob or "datasets" in blob:
-                return True
-
-        if readme_text and _DATASET_URL_RE.search(readme_text):
-            return True
-
-        if readme_text and re.search(
-            r"\b(dataset|datasets|training data|corpus)\b", readme_text, re.IGNORECASE
-        ):
-            return True
-
-        return False
-
-    def _has_example_code(self, repo_dir: Path, readme_text: str) -> bool:
-        if (repo_dir / "examples").exists() or (repo_dir / "notebooks").exists() or (repo_dir / "scripts").exists():
-            return True
-
-        for fn in ("train.py", "finetune.py", "eval.py", "inference.py"):
-            if (repo_dir / fn).exists():
-                return True
-
-        if readme_text and re.search(
-            r"(^|\n)\s*```(?:bash|sh|python)[\s\S]*?(python\s+[^\n]*\.py)",
-            readme_text,
-            re.IGNORECASE,
-        ):
-            return True
-
-        return False
-
-    async def run(self, context) -> MetricResult:
-        t0 = time.time()
-
-        readme_text: str = getattr(context, "readme_text", "") or ""
-        model_index_json = getattr(context, "model_index_json", None)
-        repo_dir = Path(getattr(context, "repo_dir"))
-
-        has_dataset = self._has_dataset_link(readme_text, model_index_json)
-        has_example = self._has_example_code(repo_dir, readme_text)
-
-        score = 0.5 * int(has_dataset) + 0.5 * int(has_example)
-        latency_ms = int((time.time() - t0) * 1000)
-
-        return MetricResult(
-            name=self.NAME,
-            score=float(score),
-            latency_ms=latency_ms,
-            details={"has_dataset": has_dataset, "has_example_code": has_example},
-        )
+class DatasetAndCodeScoreMetric(BaseMetric):
+    """Metric for evaluating linked datasets and code quality."""
+    
+    @property
+    def name(self) -> str:
+        return "dataset_and_code_score"
+    
+    async def compute(self, context: ModelContext, config: Dict[str, Any]) -> MetricResult:
+        """Compute dataset and code linkage score."""
+        with measure_time() as get_latency:
+            score = await self._calculate_dataset_code_score(context, config)
+        
+        return MetricResult(score=score, latency=get_latency())
+    
+    async def _calculate_dataset_code_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
+        """Calculate score based on linked datasets and code repositories."""
+        thresholds = config.get('thresholds', {}).get('dataset_code', {})
+        dataset_bonus = thresholds.get('dataset_link_bonus', 0.4)
+        code_bonus = thresholds.get('code_example_bonus', 0.3)
+        both_bonus = thresholds.get('both_present_bonus', 0.3)
+        
+        score = 0.1  # Base score for having a model
+        
+        # Score for linked datasets
+        has_datasets = bool(context.datasets)
+        if has_datasets:
+            score += dataset_bonus
+            
+            # Additional bonus for multiple datasets
+            if len(context.datasets) > 1:
+                score += 0.1
+        
+        # Score for linked code repositories
+        has_code = bool(context.code_repos)
+        if has_code:
+            score += code_bonus
+            
+            # Additional bonus for multiple code repos
+            if len(context.code_repos) > 1:
+                score += 0.1
+        
+        # Bonus for having both datasets and code
+        if has_datasets and has_code:
+            score += both_bonus
+        
+        # Check README for explicit dataset/code mentions
+        if context.readme_content:
+            readme_lower = context.readme_content.lower()
+            
+            dataset_mentions = any(term in readme_lower for term in [
+                'training data', 'dataset', 'benchmark', 'corpus', 'training set'
+            ])
+            
+            code_mentions = any(term in readme_lower for term in [
+                'training code', 'fine-tuning', 'example', 'tutorial', 'notebook'
+            ])
+            
+            if dataset_mentions:
+                score += 0.1
+            if code_mentions:
+                score += 0.1
+        
+        return min(1.0, score)

@@ -1,91 +1,102 @@
-from __future__ import annotations
-import re
-import time
-from typing import Dict, List, Optional
-from huggingface_hub import HfApi
-from models import MetricResult
+"""
+Dataset quality metric - evaluates quality of referenced datasets.
+"""
+from typing import Dict, Any, List
+from ..models import MetricResult, ModelContext
+from ..utils import measure_time
+from ..hf_api import HuggingFaceAPI
+from .base import BaseMetric
 
-_DATASET_URL_RE = re.compile(
-    r"https?://huggingface\.co/datasets/([A-Za-z0-9_.\-]+)/([A-Za-z0-9_.\-]+)",
-    re.IGNORECASE,
-)
 
-_FIELDS = [
-    "name_desc", "license", "size_samples", "tasks",
-    "splits", "provenance", "ethics", "load_instructions"
-]
-
-class DatasetQualityMetric:
-    NAME = "dataset_quality"
-
-    def __init__(self, hf_api: Optional[HfApi] = None):
-        self.api = hf_api or HfApi()
-
-    def _extract_ids(self, readme_text: str) -> List[str]:
-        ids = [f"{m.group(1)}/{m.group(2)}" for m in _DATASET_URL_RE.finditer(readme_text or "")]
-        return list(dict.fromkeys(ids))
-
-    def _hits_from_card(self, card: Dict) -> int:
-        hits = 0
-        if any(card.get(k) for k in ("pretty_name", "title", "description")): hits += 1
-        if card.get("license"): hits += 1
-        if any(card.get(k) for k in ("size", "num_examples", "num_rows")): hits += 1
-        if card.get("task_categories") or card.get("task_ids"): hits += 1
-        if card.get("splits"): hits += 1
-        if card.get("source_datasets") or card.get("citation"): hits += 1
-        if card.get("ethical_considerations"): hits += 1
-        if card.get("usage") or card.get("card_data") or card.get("configs"): hits += 1
-        return hits
-
-    def _hits_from_readme(self, text: str) -> int:
-        hits = 0
-        if re.search(r"\b(dataset|corpus|training data)\b", text, re.I): hits += 1
-        if re.search(r"\blicense\b", text, re.I): hits += 1
-        if re.search(r"\b\d[\d,]*\s*(samples|examples|instances)\b", text, re.I): hits += 1
-        if re.search(r"\b(task|benchmark)\b", text, re.I): hits += 1
-        if re.search(r"\b(train|validation|test)\b", text, re.I): hits += 1
-        if re.search(r"\bsource|provenance|citation\b", text, re.I): hits += 1
-        if re.search(r"\bethic|risk|bias\b", text, re.I): hits += 1
-        if re.search(r"\b(load|from\s+datasets\s+import|pip install datasets)\b", text, re.I): hits += 1
-        return hits
-
-    async def run(self, context) -> MetricResult:
-        t0 = time.time()
-        readme_text = getattr(context, "readme_text", "") or ""
-        details: Dict = {}
-
-        candidates = self._extract_ids(readme_text)
-        best_hits = -1
-        best_id = None
-        last_error = None
-
-        for ds_id in candidates:
-            try:
-                info = self.api.dataset_info(ds_id)
-                card_data = info.card_data or {}
-                hits = self._hits_from_card(card_data)
-                if hits > best_hits:
-                    best_hits = hits
-                    best_id = ds_id
-            except Exception as e:
-                last_error = str(e)
-
-        if best_hits >= 0:
-            hits = best_hits
-            details["dataset_id"] = best_id
-            if last_error:
-                details["note"] = "Some dataset cards failed to fetch"
-        else:
-            hits = self._hits_from_readme(readme_text)
-            if candidates:
-                details["warning"] = "Failed to fetch HF dataset cards; used README heuristics"
-
-        score = hits / len(_FIELDS)
-        latency_ms = int((time.time() - t0) * 1000)
-
-        return MetricResult(
-            name=self.NAME,
-            score=float(score),
-            latency_ms=latency_ms,
-            details=details or None,
-        )
+class DatasetQualityMetric(BaseMetric):
+    """Metric for evaluating quality of linked datasets."""
+    
+    @property
+    def name(self) -> str:
+        return "dataset_quality"
+    
+    async def compute(self, context: ModelContext, config: Dict[str, Any]) -> MetricResult:
+        """Compute dataset quality score."""
+        with measure_time() as get_latency:
+            score = await self._calculate_dataset_quality_score(context, config)
+        
+        return MetricResult(score=score, latency=get_latency())
+    
+    async def _calculate_dataset_quality_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
+        """Calculate dataset quality based on linked datasets."""
+        if not context.datasets:
+            return 0.3  # Default score when no datasets are linked
+        
+        thresholds = config.get('thresholds', {}).get('dataset_quality_checklist', [])
+        quality_checklist = thresholds or [
+            'description', 'license', 'splits', 'size', 'known_issues', 'ethics'
+        ]
+        
+        total_score = 0.0
+        datasets_analyzed = 0
+        
+        hf_api = HuggingFaceAPI()
+        
+        for dataset_url in context.datasets:
+            if dataset_url.platform == "huggingface":
+                dataset_score = await self._analyze_hf_dataset(dataset_url, hf_api, quality_checklist)
+                total_score += dataset_score
+                datasets_analyzed += 1
+        
+        if datasets_analyzed == 0:
+            return 0.5  # Medium score for non-HF datasets (can't analyze)
+        
+        return total_score / datasets_analyzed
+    
+    async def _analyze_hf_dataset(self, dataset_url, hf_api: HuggingFaceAPI, checklist: List[str]) -> float:
+        """Analyze a Hugging Face dataset for quality indicators."""
+        # Get dataset README
+        readme_content = await hf_api.get_readme_content(dataset_url)
+        if not readme_content:
+            return 0.2  # Low score for missing README
+        
+        # Get dataset info from API
+        dataset_info = await hf_api.get_dataset_info(dataset_url)
+        
+        score = 0.0
+        readme_lower = readme_content.lower()
+        
+        # Check each quality criterion
+        for criterion in checklist:
+            if criterion == 'description':
+                # Look for dataset description
+                if ('description' in readme_lower or 'overview' in readme_lower or 
+                    len(readme_content) > 500):
+                    score += 1.0 / len(checklist)
+            
+            elif criterion == 'license':
+                # Check for license information
+                if ('license' in readme_lower or 
+                    (dataset_info and dataset_info.get('tags') and 
+                     any('license:' in tag for tag in dataset_info['tags']))):
+                    score += 1.0 / len(checklist)
+            
+            elif criterion == 'splits':
+                # Look for train/test/validation split information
+                if any(split in readme_lower for split in ['train', 'test', 'validation', 'split']):
+                    score += 1.0 / len(checklist)
+            
+            elif criterion == 'size':
+                # Look for size information
+                if any(size_term in readme_lower for size_term in 
+                      ['size', 'examples', 'instances', 'samples', 'mb', 'gb']):
+                    score += 1.0 / len(checklist)
+            
+            elif criterion == 'known_issues':
+                # Look for known issues or limitations section
+                if any(issue_term in readme_lower for issue_term in 
+                      ['limitations', 'issues', 'bias', 'concerns', 'warnings']):
+                    score += 1.0 / len(checklist)
+            
+            elif criterion == 'ethics':
+                # Look for ethics/bias discussion
+                if any(ethics_term in readme_lower for ethics_term in 
+                      ['ethics', 'bias', 'fairness', 'responsible', 'considerations']):
+                    score += 1.0 / len(checklist)
+        
+        return score
