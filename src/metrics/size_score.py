@@ -13,26 +13,22 @@ class SizeScoreMetric(BaseMetric):
         #compute size score for different hardware targets
         with measure_time() as get_latency:
             size_score = await self._calculate_size_scores(context, config)
+            # Return scalar max as per specification: max of the four hardware scores
+            max_score = max(size_score.raspberry_pi, size_score.jetson_nano, 
+                           size_score.desktop_pc, size_score.aws_server)
         
-        return MetricResult(score=0.0, latency=get_latency())  #size score returned as object
+        return MetricResult(score=max_score, latency=get_latency())
     
     async def _calculate_size_scores(self, context: ModelContext, config: Dict[str, Any]) -> SizeScore:
         #estimate model size from various sources
         estimated_size_gb = await self._estimate_model_size(context)
         
-        thresholds = config.get('thresholds', {}).get('size_limits', {})
-        
-        #device-specific thresholds (in GB)
-        pi_limit = thresholds.get('raspberry_pi', 2.0)
-        nano_limit = thresholds.get('jetson_nano', 8.0)
-        desktop_limit = thresholds.get('desktop_pc', 32.0)
-        server_limit = thresholds.get('aws_server', 128.0)
-        
+        # Use exact thresholds from specification
         return SizeScore(
-            raspberry_pi=self._calculate_device_score(estimated_size_gb, pi_limit),
-            jetson_nano=self._calculate_device_score(estimated_size_gb, nano_limit),
-            desktop_pc=self._calculate_device_score(estimated_size_gb, desktop_limit),
-            aws_server=self._calculate_device_score(estimated_size_gb, server_limit)
+            raspberry_pi=self._calculate_raspberry_pi_score(estimated_size_gb),
+            jetson_nano=self._calculate_jetson_nano_score(estimated_size_gb),
+            desktop_pc=self._calculate_desktop_pc_score(estimated_size_gb),
+            aws_server=self._calculate_aws_server_score(estimated_size_gb)
         )
     
     async def _estimate_model_size(self, context: ModelContext) -> float:
@@ -78,14 +74,37 @@ class SizeScoreMetric(BaseMetric):
         #default assumption for unknown
         return 2.0
     
-    def _calculate_device_score(self, model_size_gb: float, device_limit_gb: float) -> float:
-        if model_size_gb <= device_limit_gb * 0.5:
-            return 1.0  #excellent fit
-        elif model_size_gb <= device_limit_gb:
-            return 0.8  #good fit
-        elif model_size_gb <= device_limit_gb * 2:
-            return 0.5  #possible but close
-        elif model_size_gb <= device_limit_gb * 4:
-            return 0.2  #challenging
+    def _calculate_raspberry_pi_score(self, model_size_gb: float) -> float:
+        """Raspberry Pi: <100MB → 1.0, 100–500MB → 0.5, >500MB → 0.0"""
+        size_mb = model_size_gb * 1024
+        if size_mb < 100:
+            return 1.0
+        elif size_mb <= 500:
+            return 0.5
         else:
-            return 0.0  #not feasible
+            return 0.0
+    
+    def _calculate_jetson_nano_score(self, model_size_gb: float) -> float:
+        """Jetson Nano: <2GB → 1.0, 2–8GB → 0.5, >8GB → 0.0"""
+        if model_size_gb < 2.0:
+            return 1.0
+        elif model_size_gb <= 8.0:
+            return 0.5
+        else:
+            return 0.0
+    
+    def _calculate_desktop_pc_score(self, model_size_gb: float) -> float:
+        """Desktop PC: <10GB → 1.0, 10–50GB → 0.5, >50GB → 0.0"""
+        if model_size_gb < 10.0:
+            return 1.0
+        elif model_size_gb <= 50.0:
+            return 0.5
+        else:
+            return 0.0
+    
+    def _calculate_aws_server_score(self, model_size_gb: float) -> float:
+        """AWS Server: <100GB → 1.0, >100GB → 0.5"""
+        if model_size_gb < 100.0:
+            return 1.0
+        else:
+            return 0.5

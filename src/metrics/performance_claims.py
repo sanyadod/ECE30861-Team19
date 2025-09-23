@@ -19,36 +19,49 @@ class PerformanceClaimsMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_performance_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate performance claims score based on README analysis."""
+        """Calculate performance claims: Reproducible steps → 1.0, Vague claims → 0.5, None → 0.0."""
         if not context.readme_content:
-            return 0.0
+            return 0.0  # None → 0.0
         
-        thresholds = config.get('thresholds', {}).get('performance', {})
-        benchmark_keywords = thresholds.get('benchmark_keywords', ['glue', 'mmlu', 'hellaswag'])
-        citation_bonus = thresholds.get('citation_bonus', 0.2)
-        numeric_bonus = thresholds.get('numeric_results_bonus', 0.3)
+        readme_lower = context.readme_content.lower()
         
-        # Extract performance information
-        perf_info = extract_performance_claims(context.readme_content, benchmark_keywords)
+        # Check for reproducible benchmarks/evals (tables or linked papers with steps/scripts)
+        reproducible_indicators = [
+            'reproduce', 'reproducible', 'evaluation script', 'eval script',
+            'benchmark script', 'benchmark.py', 'eval.py', 'evaluation.py',
+            'steps to reproduce', 'reproduction', 'script', 'code',
+            'github.com/', 'colab', 'notebook'
+        ]
         
-        base_score = 0.0
+        # Check for benchmark tables or structured results
+        table_indicators = [
+            '|', 'table', 'results', 'benchmark', 'performance',
+            'accuracy', 'f1', 'bleu', 'rouge', 'glue', 'squad'
+        ]
         
-        # Score for benchmark mentions
-        benchmarks_found = perf_info['benchmarks_mentioned']
-        if benchmarks_found:
-            benchmark_score = min(0.5, len(benchmarks_found) * 0.1)
-            base_score += benchmark_score
+        # Check for papers with methodology
+        paper_indicators = [
+            'paper', 'arxiv', 'methodology', 'experiment', 'evaluation protocol'
+        ]
         
-        # Bonus for numeric results
-        if perf_info['numeric_results']:
-            base_score += numeric_bonus
+        has_reproducible_steps = any(indicator in readme_lower for indicator in reproducible_indicators)
+        has_benchmark_tables = any(indicator in readme_lower for indicator in table_indicators)
+        has_paper_references = any(indicator in readme_lower for indicator in paper_indicators)
         
-        # Bonus for citations/links
-        if perf_info['citations']:
-            base_score += citation_bonus
+        # Reproducible steps present → 1.0
+        if has_reproducible_steps and (has_benchmark_tables or has_paper_references):
+            return 1.0
         
-        # Bonus if model card has performance data
-        if context.hf_info and context.hf_info.get('model_index'):
-            base_score += 0.2
+        # Only vague claims → 0.5
+        vague_claims = [
+            'perform', 'achieve', 'outperform', 'better', 'improved',
+            'state-of-the-art', 'sota', 'good results', 'competitive'
+        ]
+        has_vague_claims = (has_benchmark_tables or 
+                           any(claim in readme_lower for claim in vague_claims))
         
-        return min(1.0, base_score)
+        if has_vague_claims:
+            return 0.5
+        
+        # None → 0.0
+        return 0.0

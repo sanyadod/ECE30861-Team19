@@ -198,13 +198,13 @@ class MetricScorer:
                 total_score += result.score * weight
                 total_weight += weight
         
-        # Handle size score specially (average across devices)
+        # Handle size score specially (max across devices as per specification)
         size_score = metric_results.get('size_score')
         if isinstance(size_score, SizeScore):
             size_weight = weights.get('size_score', 0.0)
-            avg_size_score = (size_score.raspberry_pi + size_score.jetson_nano + 
-                             size_score.desktop_pc + size_score.aws_server) / 4.0
-            total_score += avg_size_score * size_weight
+            max_size_score = max(size_score.raspberry_pi, size_score.jetson_nano, 
+                                size_score.desktop_pc, size_score.aws_server)
+            total_score += max_size_score * size_weight
             total_weight += size_weight
         
         return total_score / max(total_weight, 1.0)

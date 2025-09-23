@@ -19,39 +19,52 @@ class RampUpTimeMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_ramp_up_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate ramp-up score based on available documentation."""
-        if not context.readme_content:
-            return 0.1  # Very low score for missing README
+        """Calculate ramp-up score based on 4 specific criteria."""
+        score = 0.0
+        criteria_count = 4
         
-        readme = context.readme_content
-        thresholds = config.get('thresholds', {}).get('ramp_up', {})
-        required_sections = thresholds.get('readme_sections', ['usage', 'quickstart', 'examples'])
-        example_bonus = thresholds.get('example_code_bonus', 0.2)
+        # Criterion 1: README present
+        if context.readme_content:
+            score += 1.0 / criteria_count
+            readme_lower = context.readme_content.lower()
+        else:
+            # No README present
+            return 0.0
         
-        # Check for required sections
-        section_scores = check_readme_sections(readme, required_sections)
-        sections_present = sum(section_scores.values())
-        section_score = sections_present / len(required_sections)
+        # Criterion 2: Install instructions
+        install_indicators = [
+            'install', 'pip install', 'conda install', 'npm install', 'yarn install',
+            'setup', 'installation', 'getting started', 'requirements', 'dependencies'
+        ]
+        if any(indicator in readme_lower for indicator in install_indicators):
+            score += 1.0 / criteria_count
         
-        # Check for code examples (basic pattern matching)
-        readme_lower = readme.lower()
-        has_code_examples = any([
-            '```python' in readme,
-            '```py' in readme,
-            'example:' in readme_lower,
-            'import ' in readme_lower,
-            'from ' in readme_lower,
-        ])
+        # Criterion 3: Training/evaluation examples
+        training_indicators = [
+            'training', 'train', 'fine-tuning', 'fine tuning', 'finetune', 
+            'evaluation', 'eval', 'benchmark', 'test', 'validate'
+        ]
+        if any(indicator in readme_lower for indicator in training_indicators):
+            score += 1.0 / criteria_count
         
-        # Base score from sections
-        base_score = section_score * 0.7
+        # Criterion 4: API usage examples
+        api_indicators = [
+            'usage', 'example', 'how to use', 'quickstart', 'tutorial',
+            'from transformers', 'import', 'model.', 'pipeline',
+            '```python', '```py', 'api', 'inference'
+        ]
+        if any(indicator in readme_lower for indicator in api_indicators):
+            score += 1.0 / criteria_count
         
-        # Bonus for code examples
-        if has_code_examples:
-            base_score += example_bonus
+        # Bonus: Check for tutorials/examples area with ≥1 item (+0.1 bonus, cap at 1.0)
+        if context.hf_info and context.hf_info.get('files'):
+            files = context.hf_info['files']
+            has_examples = any(
+                'example' in file_path.lower() or 'tutorial' in file_path.lower() or 
+                'notebook' in file_path.lower() or file_path.endswith('.ipynb')
+                for file_path in files
+            )
+            if has_examples:
+                score += 0.1
         
-        # Length bonus (more comprehensive docs)
-        if len(readme) > 1000:
-            base_score += 0.1
-        
-        return min(1.0, base_score)
+        return min(1.0, score)

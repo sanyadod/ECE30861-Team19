@@ -22,12 +22,7 @@ class LicenseScoreMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_license_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate license score based on compatibility and clarity."""
-        thresholds = config.get('thresholds', {}).get('license', {})
-        compatible_licenses = thresholds.get('compatible_licenses', ['apache-2.0', 'mit', 'bsd-3-clause'])
-        restrictive_penalty = thresholds.get('restrictive_penalty', 0.3)
-        missing_penalty = thresholds.get('missing_penalty', 0.7)
-        
+        """Calculate license score based on exact specification mapping."""
         # Try to get license from HF info first
         license_info = None
         if context.hf_info and context.hf_info.get('tags'):
@@ -41,21 +36,32 @@ class LicenseScoreMetric(BaseMetric):
         if not license_info and context.readme_content:
             license_info = parse_license_from_readme(context.readme_content)
         
+        # None/unclear → 0.3 (1.0 - 0.7 penalty for no license)
         if not license_info:
-            return 1.0 - missing_penalty  # Penalty for missing license
+            return 0.3
         
-        license_lower = license_info.lower()
+        license_lower = license_info.lower().replace('-', '').replace('_', '').replace(' ', '')
         
-        # Check for compatible licenses
-        for compatible in compatible_licenses:
-            if compatible in license_lower:
-                return 1.0  # Full score for compatible license
+        # MIT/Apache 2.0/BSD → 1.0
+        compatible_licenses = [
+            'mit', 'apache2.0', 'apache20', 'apache', 'bsd3clause', 'bsd2clause', 
+            'bsd', 'bsd3', 'bsd2', 'bsdnew', 'bsdmodified', 'bsdsimplified'
+        ]
+        for compat in compatible_licenses:
+            if compat in license_lower:
+                return 1.0
         
-        # Check for restrictive licenses
-        restrictive_terms = ['gpl', 'agpl', 'commercial', 'proprietary', 'all rights reserved']
-        for term in restrictive_terms:
-            if term in license_lower:
-                return 1.0 - restrictive_penalty
+        # LGPL (any variant) → 0.8
+        lgpl_variants = ['lgpl', 'lessergpl', 'lgplv2', 'lgplv3', 'lgpl2.1', 'lgpl3.0']
+        for lgpl in lgpl_variants:
+            if lgpl in license_lower:
+                return 0.8
         
-        # Unknown license - medium score
-        return 0.5
+        # GPL (any variant) → 0.3
+        gpl_variants = ['gpl', 'gplv2', 'gplv3', 'gpl2.0', 'gpl3.0', 'agpl', 'agplv3']
+        for gpl in gpl_variants:
+            if gpl in license_lower:
+                return 0.3
+        
+        # Unknown license format → 0.0
+        return 0.0

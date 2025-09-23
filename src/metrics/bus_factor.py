@@ -20,26 +20,10 @@ class BusFactorMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_bus_factor_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate bus factor based on git analysis and HF metadata."""
-        thresholds = config.get('thresholds', {}).get('bus_factor', {})
-        min_contributors = thresholds.get('min_contributors', 3)
-        recent_window_days = thresholds.get('recent_commits_window_days', 90)
-        single_contributor_penalty = thresholds.get('single_contributor_penalty', 0.5)
+        """Calculate bus factor based on unique commit authors: min(1.0, contributors / 5.0)."""
+        contributors = 0
         
-        total_score = 0.0
-        weight_hf = 0.6  #hugging face based analysis
-        weight_git = 0.4  #git based analysis
-        
-        #hugging Face based analysis
-        if context.hf_info:
-            hf_score = self._analyze_hf_engagement(context.hf_info)
-            total_score += hf_score * weight_hf
-        else:
-            #increase git weight if no hugging face
-            weight_git = 1.0
-        
-        #git repo analysis
-        git_score = 0.0
+        # Try to get contributor count from git repository analysis
         if context.code_repos:
             git_inspector = GitInspector()
             try:
@@ -49,24 +33,33 @@ class BusFactorMetric(BaseMetric):
                         analysis = git_inspector.analyze_repository(repo_path)
                         contributor_data = analysis.get('contributor_analysis', {})
                         
-                        unique_authors = contributor_data.get('unique_authors', 0)
+                        # Get unique authors (prefer last 12 months, otherwise all-time)
+                        recent_authors = contributor_data.get('recent_unique_authors', 0)
+                        all_time_authors = contributor_data.get('unique_authors', 0)
                         
-                        #score based on contributor count
-                        if unique_authors >= min_contributors:
-                            git_score = 0.8
-                        elif unique_authors == 2:
-                            git_score = 0.6
-                        elif unique_authors == 1:
-                            git_score = single_contributor_penalty
-                        else:
-                            git_score = 0.1
-                        break  #first available repo
+                        contributors = recent_authors if recent_authors > 0 else all_time_authors
+                        break  # Use first available repo
             finally:
                 git_inspector.cleanup()
         
-        total_score += git_score * weight_git
+        # If no code repos or no contributors found, try to estimate from HF metadata
+        if contributors == 0 and context.hf_info:
+            # Estimate contributors based on HF engagement as fallback
+            downloads = context.hf_info.get('downloads', 0)
+            likes = context.hf_info.get('likes', 0)
+            
+            # Rough estimation: high engagement suggests more contributors
+            if downloads > 100000 and likes > 100:
+                contributors = 5  # Assume well-maintained project
+            elif downloads > 10000 and likes > 50:
+                contributors = 3
+            elif downloads > 1000 and likes > 10:
+                contributors = 2
+            else:
+                contributors = 1
         
-        return min(1.0, total_score)
+        # Apply specification formula: BusFactor = min(1.0, contributors / 5.0)
+        return min(1.0, contributors / 5.0)
     
     #analyze hugging face engagement
     def _analyze_hf_engagement(self, hf_info: Dict[str, Any]) -> float:

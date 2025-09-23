@@ -23,11 +23,9 @@ class CodeQualityMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_code_quality_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate code quality based on repository analysis."""
+        """Calculate code quality using existing static-analysis hooks, tests folder, CI config."""
         if not context.code_repos:
-            return 0.4  # Default medium score when no code is linked
-        
-        thresholds = config.get('thresholds', {}).get('code_quality', {})
+            return 0.0  # No code repos linked
         
         total_score = 0.0
         repos_analyzed = 0
@@ -39,7 +37,7 @@ class CodeQualityMetric(BaseMetric):
                 if code_repo.platform == "github":
                     repo_path = git_inspector.clone_repo(code_repo)
                     if repo_path:
-                        repo_score = self._analyze_code_repository(repo_path, git_inspector, thresholds)
+                        repo_score = self._analyze_code_quality_by_spec(repo_path, git_inspector)
                         total_score += repo_score
                         repos_analyzed += 1
                         break  # Analyze first available repo for efficiency
@@ -47,9 +45,102 @@ class CodeQualityMetric(BaseMetric):
             git_inspector.cleanup()
         
         if repos_analyzed == 0:
-            return 0.3  # Low score if no repos could be analyzed
+            return 0.0  # No repos could be analyzed
         
         return total_score / repos_analyzed
+    
+    def _analyze_code_quality_by_spec(self, repo_path: str, inspector: GitInspector) -> float:
+        """Analyze code quality according to specification: use existing static-analysis hooks."""
+        import os
+        import subprocess
+        import glob
+        
+        total_errors = 0
+        
+        # Try to actually run existing static analysis tools
+        try:
+            # Check if flake8 config exists and try to run it
+            flake8_configs = ['.flake8', 'setup.cfg', 'tox.ini', 'pyproject.toml']
+            has_flake8_config = any(os.path.exists(os.path.join(repo_path, config)) 
+                                   for config in flake8_configs)
+            
+            if has_flake8_config:
+                try:
+                    # Try to run flake8 on the repository
+                    result = subprocess.run(['flake8', repo_path], 
+                                          capture_output=True, text=True, 
+                                          timeout=30, cwd=repo_path)
+                    if result.returncode == 0:
+                        # No errors found
+                        total_errors += 0
+                    else:
+                        # Count error lines in output
+                        error_lines = [line for line in result.stdout.split('\n') if line.strip()]
+                        total_errors += len(error_lines)
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    # Fallback: estimate errors from file analysis
+                    python_files = glob.glob(os.path.join(repo_path, '**', '*.py'), recursive=True)
+                    total_errors += len(python_files) // 5  # Conservative estimate
+            
+            # Check for mypy config and try to run it
+            mypy_configs = ['mypy.ini', '.mypy.ini', 'setup.cfg', 'pyproject.toml']
+            has_mypy_config = any(os.path.exists(os.path.join(repo_path, config)) 
+                                 for config in mypy_configs)
+            
+            if has_mypy_config:
+                try:
+                    # Try to run mypy on the repository
+                    result = subprocess.run(['mypy', repo_path], 
+                                          capture_output=True, text=True, 
+                                          timeout=30, cwd=repo_path)
+                    if result.returncode != 0:
+                        # Count mypy errors
+                        error_lines = [line for line in result.stdout.split('\n') 
+                                     if 'error:' in line.lower()]
+                        total_errors += len(error_lines)
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    # Fallback: estimate type errors
+                    python_files = glob.glob(os.path.join(repo_path, '**', '*.py'), recursive=True)
+                    total_errors += len(python_files) // 8  # Conservative estimate
+            
+            # If no linting configs found, use basic syntax checking
+            if not has_flake8_config and not has_mypy_config:
+                python_files = glob.glob(os.path.join(repo_path, '**', '*.py'), recursive=True)
+                for py_file in python_files[:20]:  # Limit for performance
+                    try:
+                        with open(py_file, 'r') as f:
+                            content = f.read()
+                            # Basic syntax check
+                            compile(content, py_file, 'exec')
+                    except SyntaxError:
+                        total_errors += 1
+                    except:
+                        pass  # Other errors like encoding issues
+        
+        except Exception:
+            # Ultimate fallback: conservative estimation
+            python_files = glob.glob(os.path.join(repo_path, '**', '*.py'), recursive=True)
+            total_errors = max(1, len(python_files) // 4)  # Conservative estimate
+        
+        # Calculate base score: clamp(1.0 - total_errors / 50, 0, 1)
+        base_score = max(0.0, min(1.0, 1.0 - total_errors / 50.0))
+        
+        # Bump: tests folder exists (tests/ or test/) → +0.1
+        has_tests = (os.path.exists(os.path.join(repo_path, 'tests')) or 
+                    os.path.exists(os.path.join(repo_path, 'test')))
+        if has_tests:
+            base_score += 0.1
+        
+        # Bump: CI config present (.github/workflows/*.yml or ci/*.yml) → +0.1
+        has_ci = (os.path.exists(os.path.join(repo_path, '.github', 'workflows')) or
+                 os.path.exists(os.path.join(repo_path, 'ci')) or
+                 any(os.path.exists(os.path.join(repo_path, ci_file)) 
+                     for ci_file in ['.travis.yml', '.circleci', 'azure-pipelines.yml']))
+        if has_ci:
+            base_score += 0.1
+        
+        # Cap at 1.0
+        return min(1.0, base_score)
     
     def _analyze_code_repository(self, repo_path: str, inspector: GitInspector, thresholds: Dict[str, Any]) -> float:
         """Analyze a code repository for quality indicators."""

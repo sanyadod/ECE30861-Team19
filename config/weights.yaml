@@ -1,9 +1,9 @@
 metric_weights:
   ramp_up_time: 0.15        # Weight for ease of getting started
-  bus_factor: 0.10          # Weight for contributor diversity
-  performance_claims: 0.15  # Weight for documented performance
-  license: 0.10             # Weight for license compatibility
-  size_score: 0.15          # Weight for deployment feasibility
+  bus_factor: 0.15          # Weight for contributor diversity
+  performance_claims: 0.10  # Weight for documented performance
+  license: 0.15             # Weight for license compatibility
+  size_score: 0.10          # Weight for deployment feasibility
   dataset_and_code_score: 0.15  # Weight for linked resources
   dataset_quality: 0.10     # Weight for dataset documentation
   code_quality: 0.10        # Weight for code structure and quality
