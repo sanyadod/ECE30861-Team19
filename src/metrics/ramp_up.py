@@ -1,6 +1,3 @@
-"""
-Ramp-up time metric - measures how easy it is to get started with the model.
-"""
 from typing import Dict, Any
 from ..models import MetricResult, ModelContext
 from ..utils import measure_time, check_readme_sections
