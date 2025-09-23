@@ -37,9 +37,15 @@ def setup_logging() -> logging.Logger:
     # Set up file handler if LOG_FILE is specified
     log_file = os.getenv("LOG_FILE")
     if log_file:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        try:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except Exception:
+            # Fall back to console if file path is invalid/unwritable
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
     else:
         # Default to stderr (not stdout to avoid interfering with NDJSON output)
         console_handler = logging.StreamHandler()

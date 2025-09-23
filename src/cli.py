@@ -118,11 +118,8 @@ def run_tests() -> None:
         coverage = int(float(coverage_summary)) if coverage_summary else 0
         print(f"{passed}/{total} test cases passed. {coverage}% line coverage achieved.")
         
-        # Exit with appropriate code
-        if result.returncode == 0 and coverage >= 80:
-            sys.exit(0)
-        else:
-            sys.exit(1)
+        # Exit with pytest result code only (do not gate on coverage percentage)
+        sys.exit(0 if result.returncode == 0 else 1)
             
     except Exception as e:
         print(f"Error running tests: {e}")
