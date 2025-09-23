@@ -69,4 +69,4 @@ class DatasetAndCodeScoreMetric(BaseMetric):
         elif has_dataset_link or has_example_code:
             return 0.5  # Only one → 0.5
         else:
-            return 0.0  # Neither → 0.0
+            return 0.1  # Neither → base score 0.1

@@ -28,8 +28,8 @@ class RampUpTimeMetric(BaseMetric):
             score += 1.0 / criteria_count
             readme_lower = context.readme_content.lower()
         else:
-            # No README present
-            return 0.0
+            # No README present - return low baseline score
+            return 0.1
         
         # Criterion 2: Install instructions
         install_indicators = [

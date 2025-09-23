@@ -23,14 +23,13 @@ class DatasetQualityMetric(BaseMetric):
         return MetricResult(score=score, latency=get_latency())
     
     async def _calculate_dataset_quality_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
-        """Calculate dataset quality based on linked datasets."""
+        """Calculate dataset quality: Score = (#filled / 4) for description, size/#samples, license, benchmark references."""
+        # If no datasets are linked, check README for dataset information
         if not context.datasets:
-            return 0.3  # Default score when no datasets are linked
-        
-        thresholds = config.get('thresholds', {}).get('dataset_quality_checklist', [])
-        quality_checklist = thresholds or [
-            'description', 'license', 'splits', 'size', 'known_issues', 'ethics'
-        ]
+            if context.readme_content:
+                return self._analyze_readme_dataset_quality(context.readme_content)
+            else:
+                return 0.3  # Default when no datasets
         
         total_score = 0.0
         datasets_analyzed = 0
@@ -39,64 +38,69 @@ class DatasetQualityMetric(BaseMetric):
         
         for dataset_url in context.datasets:
             if dataset_url.platform == "huggingface":
-                dataset_score = await self._analyze_hf_dataset(dataset_url, hf_api, quality_checklist)
+                dataset_score = await self._analyze_hf_dataset_quality(dataset_url, hf_api)
                 total_score += dataset_score
                 datasets_analyzed += 1
         
         if datasets_analyzed == 0:
-            return 0.5  # Medium score for non-HF datasets (can't analyze)
+            # Non-HF datasets - check README fallback
+            if context.readme_content:
+                return self._analyze_readme_dataset_quality(context.readme_content)
+            else:
+                return 0.3  # Default when no datasets
         
         return total_score / datasets_analyzed
     
-    async def _analyze_hf_dataset(self, dataset_url, hf_api: HuggingFaceAPI, checklist: List[str]) -> float:
-        """Analyze a Hugging Face dataset for quality indicators."""
+    async def _analyze_hf_dataset_quality(self, dataset_url, hf_api: HuggingFaceAPI) -> float:
+        """Analyze a Hugging Face dataset for quality: description, size/#samples, license, benchmark references."""
         # Get dataset README
         readme_content = await hf_api.get_readme_content(dataset_url)
         if not readme_content:
-            return 0.2  # Low score for missing README
+            return 0.0  # Nothing found → 0.0
         
         # Get dataset info from API
         dataset_info = await hf_api.get_dataset_info(dataset_url)
         
+        return self._analyze_dataset_content(readme_content, dataset_info)
+    
+    def _analyze_readme_dataset_quality(self, readme_content: str) -> float:
+        """Analyze README content for dataset quality indicators."""
+        return self._analyze_dataset_content(readme_content, None)
+    
+    def _analyze_dataset_content(self, readme_content: str, dataset_info: Dict[str, Any] = None) -> float:
+        """Analyze content for 4 specific dataset quality fields."""
         score = 0.0
         readme_lower = readme_content.lower()
         
-        # Check each quality criterion
-        for criterion in checklist:
-            if criterion == 'description':
-                # Look for dataset description
-                if ('description' in readme_lower or 'overview' in readme_lower or 
-                    len(readme_content) > 500):
-                    score += 1.0 / len(checklist)
-            
-            elif criterion == 'license':
-                # Check for license information
-                if ('license' in readme_lower or 
-                    (dataset_info and dataset_info.get('tags') and 
-                     any('license:' in tag for tag in dataset_info['tags']))):
-                    score += 1.0 / len(checklist)
-            
-            elif criterion == 'splits':
-                # Look for train/test/validation split information
-                if any(split in readme_lower for split in ['train', 'test', 'validation', 'split']):
-                    score += 1.0 / len(checklist)
-            
-            elif criterion == 'size':
-                # Look for size information
-                if any(size_term in readme_lower for size_term in 
-                      ['size', 'examples', 'instances', 'samples', 'mb', 'gb']):
-                    score += 1.0 / len(checklist)
-            
-            elif criterion == 'known_issues':
-                # Look for known issues or limitations section
-                if any(issue_term in readme_lower for issue_term in 
-                      ['limitations', 'issues', 'bias', 'concerns', 'warnings']):
-                    score += 1.0 / len(checklist)
-            
-            elif criterion == 'ethics':
-                # Look for ethics/bias discussion
-                if any(ethics_term in readme_lower for ethics_term in 
-                      ['ethics', 'bias', 'fairness', 'responsible', 'considerations']):
-                    score += 1.0 / len(checklist)
+        # 1. Description (1/4 points)
+        if ('description' in readme_lower or 'overview' in readme_lower or 
+            'dataset' in readme_lower or len(readme_content) > 300):
+            score += 0.25
+        
+        # 2. Size/#samples (1/4 points)
+        size_indicators = [
+            'size', 'samples', 'examples', 'instances', 'records', 'entries',
+            'rows', 'datapoints', 'mb', 'gb', 'kb', 'million', 'thousand'
+        ]
+        if any(indicator in readme_lower for indicator in size_indicators):
+            score += 0.25
+        
+        # 3. License (1/4 points)
+        license_found = False
+        if 'license' in readme_lower:
+            license_found = True
+        elif dataset_info and dataset_info.get('tags'):
+            license_found = any('license:' in tag for tag in dataset_info['tags'])
+        
+        if license_found:
+            score += 0.25
+        
+        # 4. Benchmark references (1/4 points)
+        benchmark_indicators = [
+            'benchmark', 'evaluation', 'baseline', 'performance', 'accuracy',
+            'f1', 'bleu', 'rouge', 'glue', 'squad', 'superglue', 'results'
+        ]
+        if any(indicator in readme_lower for indicator in benchmark_indicators):
+            score += 0.25
         
         return score

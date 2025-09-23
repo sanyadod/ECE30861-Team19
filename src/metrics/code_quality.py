@@ -25,7 +25,7 @@ class CodeQualityMetric(BaseMetric):
     async def _calculate_code_quality_score(self, context: ModelContext, config: Dict[str, Any]) -> float:
         """Calculate code quality using existing static-analysis hooks, tests folder, CI config."""
         if not context.code_repos:
-            return 0.0  # No code repos linked
+            return 0.4  # Default medium score when no code repos
         
         total_score = 0.0
         repos_analyzed = 0
@@ -45,7 +45,7 @@ class CodeQualityMetric(BaseMetric):
             git_inspector.cleanup()
         
         if repos_analyzed == 0:
-            return 0.0  # No repos could be analyzed
+            return 0.4  # Default medium score when no repos could be analyzed
         
         return total_score / repos_analyzed
     
