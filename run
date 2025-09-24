@@ -56,7 +56,9 @@ def main():
             sys.exit(1)
         
         try:
-            from src.cli import process_urls
+            from src.cli import _validate_environment, process_urls
+            # Validate environment variables at startup
+            _validate_environment()
             process_urls(str(url_file.absolute()))
         except ImportError as e:
             print(f"Failed to import CLI module: {e}")

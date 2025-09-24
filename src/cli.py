@@ -19,17 +19,21 @@ from .urls import build_model_contexts
 app = typer.Typer(help="Audit ML models with quality metrics")
 
 
-def process_urls(url_file: str) -> None:
-    """Process URLs from file and output NDJSON results."""
-    # Validate critical environment variables at startup per specification
-    # 1) Validate GitHub token (if required by spec): must be present and non-empty
+def _validate_environment() -> None:
+    """Validate critical environment variables at startup."""
+    # 1) Validate GitHub token: must be present and non-empty if provided
     gh_token = os.getenv("GITHUB_TOKEN")
-    # Only enforce failure when token is explicitly provided but invalid/empty
-    if gh_token is not None and gh_token.strip() in ("", "INVALID"):
+    if gh_token is not None and (not gh_token.strip() or gh_token.strip() == "INVALID"):
         sys.exit(1)
 
     # 2) Setup logging; logging_utils will exit(1) for invalid LOG_FILE
-    logger = setup_logging()
+    setup_logging()
+
+
+def process_urls(url_file: str) -> None:
+    """Process URLs from file and output NDJSON results."""
+    # Environment validation is handled by _validate_environment() in command handlers
+    logger = get_logger()
 
     try:
         # Read URLs from file (support comma and/or whitespace separated entries)
@@ -149,6 +153,9 @@ def run_tests() -> None:
 @app.command()
 def install():
     """Install dependencies in userland."""
+    # Validate environment variables at startup
+    _validate_environment()
+    
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"]
@@ -162,12 +169,16 @@ def install():
 @app.command()
 def test():
     """Run test suite."""
+    # Validate environment variables at startup
+    _validate_environment()
     run_tests()
 
 
 @app.command()
 def audit(url_file: str):
     """Audit models from URL file."""
+    # Validate environment variables at startup
+    _validate_environment()
     process_urls(url_file)
 
 
