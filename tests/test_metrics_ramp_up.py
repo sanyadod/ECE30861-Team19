@@ -1,8 +1,8 @@
 """
 Tests for ramp-up time metric.
 """
+
 import pytest
-from unittest.mock import Mock
 
 from src.metrics.ramp_up import RampUpTimeMetric
 from src.models import ModelContext, ParsedURL, URLCategory
@@ -21,7 +21,7 @@ def model_context():
         url="https://huggingface.co/test/model",
         category=URLCategory.MODEL,
         name="test/model",
-        platform="huggingface"
+        platform="huggingface",
     )
     return ModelContext(model_url=model_url)
 
@@ -30,10 +30,10 @@ def model_context():
 def config():
     """Create test configuration."""
     return {
-        'thresholds': {
-            'ramp_up': {
-                'readme_sections': ['usage', 'quickstart', 'examples'],
-                'example_code_bonus': 0.2
+        "thresholds": {
+            "ramp_up": {
+                "readme_sections": ["usage", "quickstart", "examples"],
+                "example_code_bonus": 0.2,
             }
         }
     }
@@ -48,7 +48,7 @@ def test_metric_name(ramp_up_metric):
 async def test_compute_no_readme(ramp_up_metric, model_context, config):
     """Test computation with no README."""
     result = await ramp_up_metric.compute(model_context, config)
-    
+
     assert result.score == 0.1  # Low score for missing README
     assert result.latency >= 0
 
@@ -58,19 +58,19 @@ async def test_compute_with_readme(ramp_up_metric, model_context, config):
     """Test computation with README content."""
     model_context.readme_content = """
     # Test Model
-    
+
     ## Usage
     Here's how to use this model...
-    
+
     ## Examples
     ```python
     import torch
     model = load_model()
     ```
     """
-    
+
     result = await ramp_up_metric.compute(model_context, config)
-    
+
     assert result.score > 0.1  # Should get higher score
     assert result.latency >= 0
 
@@ -78,28 +78,31 @@ async def test_compute_with_readme(ramp_up_metric, model_context, config):
 @pytest.mark.asyncio
 async def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
     """Test computation with comprehensive README."""
-    model_context.readme_content = """
+    model_context.readme_content = (
+        """
     # Test Model
-    
+
     ## Usage
     Detailed usage instructions...
-    
+
     ## Quickstart
     Quick start guide...
-    
+
     ## Examples
     Multiple examples with code...
-    
+
     ```python
     from transformers import AutoModel
     model = AutoModel.from_pretrained("test/model")
     ```
-    
+
     This is a long README with over 1000 characters to test the length bonus.
     It contains comprehensive documentation covering all aspects of the model.
-    """ * 10  # Make it long
-    
+    """
+        * 10
+    )  # Make it long
+
     result = await ramp_up_metric.compute(model_context, config)
-    
+
     assert result.score > 0.7  # Should get high score
     assert result.latency >= 0

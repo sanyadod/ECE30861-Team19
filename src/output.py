@@ -1,17 +1,18 @@
 import json
 import sys
 from typing import List
+
 from .models import AuditResult
 
 
 class NDJSONOutputter:
     """Handles NDJSON output to stdout."""
-    
+
     def output_results(self, results: List[AuditResult]) -> None:
         """Output results as NDJSON to stdout."""
         for result in results:
             self.output_single_result(result)
-    
+
     def output_single_result(self, result: AuditResult) -> None:
         """Output a single result as NDJSON to stdout."""
         # Use exact field ordering as specified
@@ -32,7 +33,7 @@ class NDJSONOutputter:
                 "raspberry_pi": result.size_score.raspberry_pi,
                 "jetson_nano": result.size_score.jetson_nano,
                 "desktop_pc": result.size_score.desktop_pc,
-                "aws_server": result.size_score.aws_server
+                "aws_server": result.size_score.aws_server,
             },
             "size_score_latency": result.size_score_latency,
             "dataset_and_code_score": result.dataset_and_code_score,
@@ -40,8 +41,8 @@ class NDJSONOutputter:
             "dataset_quality": result.dataset_quality,
             "dataset_quality_latency": result.dataset_quality_latency,
             "code_quality": result.code_quality,
-            "code_quality_latency": result.code_quality_latency
+            "code_quality_latency": result.code_quality_latency,
         }
-        json_line = json.dumps(data, separators=(',', ':'))
+        json_line = json.dumps(data, separators=(",", ":"))
         print(json_line, file=sys.stdout)
         sys.stdout.flush()

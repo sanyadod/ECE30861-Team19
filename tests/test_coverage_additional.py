@@ -1,18 +1,16 @@
 """
 Additional targeted tests to raise coverage ≥ 80%.
 """
-import os
-import asyncio
-import tempfile
+
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
-from src.metrics.size_score import SizeScoreMetric
-from src.metrics.code_quality import CodeQualityMetric
 from src.git_inspect import GitInspector
 from src.hf_api import HuggingFaceAPI
+from src.metrics.code_quality import CodeQualityMetric
+from src.metrics.size_score import SizeScoreMetric
 from src.models import ModelContext, ParsedURL, URLCategory
 
 
@@ -22,15 +20,25 @@ async def test_size_score_estimation_paths_readme_and_patterns():
 
     # From README content (7B -> ~14GB via utils mapping or model patterns)
     context = ModelContext(
-        model_url=ParsedURL(url="https://hf.co/a/b", category=URLCategory.MODEL, name="a/b", platform="huggingface"),
-        readme_content="This is a 7B parameter model"
+        model_url=ParsedURL(
+            url="https://hf.co/a/b",
+            category=URLCategory.MODEL,
+            name="a/b",
+            platform="huggingface",
+        ),
+        readme_content="This is a 7B parameter model",
     )
     size_scores = await metric._calculate_size_scores(context, {})
     assert 0.0 <= size_scores.aws_server <= 1.0
 
     # From hf_info files list estimation
     context = ModelContext(
-        model_url=ParsedURL(url="https://hf.co/a/b", category=URLCategory.MODEL, name="a/b", platform="huggingface"),
+        model_url=ParsedURL(
+            url="https://hf.co/a/b",
+            category=URLCategory.MODEL,
+            name="a/b",
+            platform="huggingface",
+        ),
         hf_info={"files": ["pytorch_model-00001-of-00002.bin", "config.json"]},
     )
     size_scores = await metric._calculate_size_scores(context, {})
@@ -38,7 +46,12 @@ async def test_size_score_estimation_paths_readme_and_patterns():
 
     # From model name patterns (13B)
     context = ModelContext(
-        model_url=ParsedURL(url="https://hf.co/a/awesome-13B", category=URLCategory.MODEL, name="awesome-13B", platform="huggingface"),
+        model_url=ParsedURL(
+            url="https://hf.co/a/awesome-13B",
+            category=URLCategory.MODEL,
+            name="awesome-13B",
+            platform="huggingface",
+        ),
     )
     size_scores = await metric._calculate_size_scores(context, {})
     assert 0.0 <= size_scores.desktop_pc <= 1.0
@@ -46,7 +59,12 @@ async def test_size_score_estimation_paths_readme_and_patterns():
     # Generic names
     for name in ["model-large", "model-base", "model-small", "unknown-model"]:
         context = ModelContext(
-            model_url=ParsedURL(url=f"https://hf.co/a/{name}", category=URLCategory.MODEL, name=name, platform="huggingface"),
+            model_url=ParsedURL(
+                url=f"https://hf.co/a/{name}",
+                category=URLCategory.MODEL,
+                name=name,
+                platform="huggingface",
+            ),
         )
         size_scores = await metric._calculate_size_scores(context, {})
         assert 0.0 <= size_scores.raspberry_pi <= 1.0
@@ -150,5 +168,3 @@ def test_git_inspect_structure_and_docs(tmp_path: Path):
         assert d["documentation_score"] >= 0.25
     finally:
         insp.cleanup()
-
-

@@ -1,16 +1,18 @@
 """
 Tests for URL parsing and categorization.
 """
+
 import pytest
-from src.urls import parse_url, build_model_contexts, _find_relevant_resources
-from src.models import URLCategory, ParsedURL
+
+from src.models import ParsedURL, URLCategory
+from src.urls import _find_relevant_resources, build_model_contexts, parse_url
 
 
 def test_parse_huggingface_model_url():
     """Test parsing Hugging Face model URL."""
     url = "https://huggingface.co/google/gemma-3-270m"
     parsed = parse_url(url)
-    
+
     assert parsed.category == URLCategory.MODEL
     assert parsed.platform == "huggingface"
     assert parsed.owner == "google"
@@ -22,7 +24,7 @@ def test_parse_huggingface_dataset_url():
     """Test parsing Hugging Face dataset URL."""
     url = "https://huggingface.co/datasets/xlangai/AgentNet"
     parsed = parse_url(url)
-    
+
     assert parsed.category == URLCategory.DATASET
     assert parsed.platform == "huggingface"
     assert parsed.owner == "xlangai"
@@ -34,7 +36,7 @@ def test_parse_github_url():
     """Test parsing GitHub URL."""
     url = "https://github.com/SkyworkAI/Matrix-Game"
     parsed = parse_url(url)
-    
+
     assert parsed.category == URLCategory.CODE
     assert parsed.platform == "github"
     assert parsed.owner == "SkyworkAI"
@@ -46,7 +48,7 @@ def test_parse_unknown_url():
     """Test parsing unknown URL."""
     url = "https://example.com/some/model"
     parsed = parse_url(url)
-    
+
     assert parsed.category == URLCategory.MODEL
     assert parsed.platform == "unknown"
     assert parsed.name == "model"
@@ -64,11 +66,11 @@ def test_build_model_contexts():
     urls = [
         "https://huggingface.co/datasets/test/dataset",
         "https://github.com/test/code",
-        "https://huggingface.co/test/model"
+        "https://huggingface.co/test/model",
     ]
-    
+
     contexts = build_model_contexts(urls)
-    
+
     assert len(contexts) == 1
     context = contexts[0]
     assert context.model_url.name == "test/model"
@@ -84,9 +86,9 @@ def test_find_relevant_resources():
         name="test/sentiment-model",
         platform="huggingface",
         owner="test",
-        repo="sentiment-model"
+        repo="sentiment-model",
     )
-    
+
     resources = [
         ParsedURL(
             url="https://huggingface.co/datasets/test/sentiment-data",
@@ -94,10 +96,10 @@ def test_find_relevant_resources():
             name="test/sentiment-data",
             platform="huggingface",
             owner="test",
-            repo="sentiment-data"
+            repo="sentiment-data",
         )
     ]
-    
+
     relevant = _find_relevant_resources(model_url, resources)
     assert len(relevant) > 0  # Should find the matching owner
 

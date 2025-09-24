@@ -1,13 +1,13 @@
 """
 Tests for utility functions.
 """
-import pytest
+
 from src.utils import (
-    extract_model_size_from_text, 
-    parse_license_from_readme,
     check_readme_sections,
+    extract_model_size_from_text,
     extract_performance_claims,
-    measure_time
+    measure_time,
+    parse_license_from_readme,
 )
 
 
@@ -43,11 +43,11 @@ def test_parse_license_from_readme():
     """Test parsing license from README."""
     readme = """
     # Model
-    
+
     ## License
     This model is licensed under MIT License.
     """
-    
+
     license_info = parse_license_from_readme(readme)
     assert license_info is not None
     assert "MIT License" in license_info
@@ -56,7 +56,7 @@ def test_parse_license_from_readme():
 def test_parse_license_from_readme_none():
     """Test parsing license from README without license section."""
     readme = "# Model\n\nThis is a model."
-    
+
     license_info = parse_license_from_readme(readme)
     assert license_info is None
 
@@ -65,40 +65,40 @@ def test_check_readme_sections():
     """Test checking README sections."""
     readme = """
     # Model
-    
+
     ## Usage
     How to use...
-    
-    ## Examples  
+
+    ## Examples
     Example code...
     """
-    
-    sections = ['usage', 'examples', 'installation']
+
+    sections = ["usage", "examples", "installation"]
     result = check_readme_sections(readme, sections)
-    
-    assert result['usage'] == True
-    assert result['examples'] == True
-    assert result['installation'] == False
+
+    assert result["usage"]
+    assert result["examples"]
+    assert result["installation"] is False
 
 
 def test_extract_performance_claims():
     """Test extracting performance claims."""
     readme = """
     # Model
-    
+
     Performance on GLUE benchmark: 82.3%
     MMLU score: 0.85
-    
+
     See paper: https://arxiv.org/abs/2301.00001
     """
-    
-    keywords = ['glue', 'mmlu']
+
+    keywords = ["glue", "mmlu"]
     claims = extract_performance_claims(readme, keywords)
-    
-    assert 'glue' in claims['benchmarks_mentioned']
-    assert 'mmlu' in claims['benchmarks_mentioned']
-    assert claims['numeric_results'] == True
-    assert claims['citations'] == True
+
+    assert "glue" in claims["benchmarks_mentioned"]
+    assert "mmlu" in claims["benchmarks_mentioned"]
+    assert claims["numeric_results"]
+    assert claims["citations"]
 
 
 def test_measure_time_context_manager():
@@ -106,8 +106,9 @@ def test_measure_time_context_manager():
     with measure_time() as get_latency:
         # Simulate some work
         import time
+
         time.sleep(0.01)  # 10ms
-    
+
     latency = get_latency()
     assert latency >= 10  # Should be at least 10ms
     assert isinstance(latency, int)
@@ -115,8 +116,8 @@ def test_measure_time_context_manager():
 
 def test_extract_performance_claims_empty():
     """Test extracting performance claims from empty text."""
-    claims = extract_performance_claims("", ['glue'])
-    
-    assert claims['benchmarks_mentioned'] == []
-    assert claims['numeric_results'] == False
-    assert claims['citations'] == False
+    claims = extract_performance_claims("", ["glue"])
+
+    assert claims["benchmarks_mentioned"] == []
+    assert claims["numeric_results"] is False
+    assert claims["citations"] is False
