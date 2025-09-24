@@ -52,7 +52,7 @@ def test_log_file_validation_valid():
     """Test that valid log file path passes validation."""
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_path = temp_file.name
-    
+
     try:
         with patch.dict(os.environ, {"LOG_FILE": temp_path}):
             # Should not raise SystemExit
@@ -65,7 +65,7 @@ def test_log_file_validation_invalid_path():
     """Test that invalid log file path causes exit(1)."""
     # Use a path that definitely doesn't exist and can't be created
     invalid_path = "/nonexistent/directory/that/cannot/be/created/log.txt"
-    
+
     with patch.dict(os.environ, {"LOG_FILE": invalid_path}):
         with pytest.raises(SystemExit) as exc_info:
             _validate_environment()
@@ -79,9 +79,9 @@ def test_log_file_validation_permission_denied():
         read_only_dir = os.path.join(temp_dir, "readonly")
         os.makedirs(read_only_dir)
         os.chmod(read_only_dir, 0o444)  # Read-only
-        
+
         log_file_path = os.path.join(read_only_dir, "log.txt")
-        
+
         with patch.dict(os.environ, {"LOG_FILE": log_file_path}):
             with pytest.raises(SystemExit) as exc_info:
                 _validate_environment()
@@ -99,7 +99,7 @@ def test_both_validations_together():
     """Test both validations work together."""
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_path = temp_file.name
-    
+
     try:
         with patch.dict(os.environ, {
             "GITHUB_TOKEN": "valid_token_123",
@@ -114,7 +114,7 @@ def test_both_validations_together():
 def test_both_validations_fail():
     """Test that both invalid values cause exit(1)."""
     invalid_path = "/nonexistent/directory/log.txt"
-    
+
     with patch.dict(os.environ, {
         "GITHUB_TOKEN": "INVALID",
         "LOG_FILE": invalid_path
@@ -127,13 +127,13 @@ def test_both_validations_fail():
 def test_cli_command_validation():
     """Test that CLI commands validate environment variables."""
     from src.cli import app
-    
+
     # Test that install command validates environment
     with patch.dict(os.environ, {"GITHUB_TOKEN": "INVALID"}):
         with pytest.raises(SystemExit) as exc_info:
             app(["install"])
         assert exc_info.value.code == 1
-    
+
     # Test that test command validates environment
     with patch.dict(os.environ, {"GITHUB_TOKEN": "INVALID"}):
         with pytest.raises(SystemExit) as exc_info:
@@ -145,32 +145,34 @@ def test_run_script_validation():
     """Test that the run script validates environment variables."""
     import subprocess
     import sys
-    
+
     # Create a temporary URL file for testing
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
+    with tempfile.NamedTemporaryFile(
+        mode='w', delete=False, suffix='.txt'
+    ) as temp_file:
         temp_file.write("https://huggingface.co/test/model")
         url_file_path = temp_file.name
-    
+
     try:
         # Test with invalid GitHub token
         env = os.environ.copy()
         env["GITHUB_TOKEN"] = "INVALID"
-        
+
         result = subprocess.run([
             sys.executable, "run", url_file_path
         ], env=env, capture_output=True, text=True)
-        
+
         assert result.returncode == 1
-        
+
         # Test with invalid log file
         env = os.environ.copy()
         env["LOG_FILE"] = "/nonexistent/path/log.txt"
-        
+
         result = subprocess.run([
             sys.executable, "run", url_file_path
         ], env=env, capture_output=True, text=True)
-        
+
         assert result.returncode == 1
-        
+
     finally:
         os.unlink(url_file_path)

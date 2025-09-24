@@ -155,7 +155,7 @@ def install():
     """Install dependencies in userland."""
     # Validate environment variables at startup
     _validate_environment()
-    
+
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"]
