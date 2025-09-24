@@ -133,14 +133,15 @@ class MetricScorer:
     async def _compute_metrics_parallel(self, context: ModelContext) -> Dict[str, Any]:
         """Compute all metrics in parallel."""
         # Create tasks for all metrics
-        tasks = []
+        tasks: List[tuple[str, Any]] = []
         for metric in self.metrics:
             if metric.name == "size_score":
                 # Size score returns a SizeScore object, handle specially
-                task = self._compute_size_metric_with_latency(metric, context)
+                size_task = self._compute_size_metric_with_latency(metric, context)
+                tasks.append((metric.name, size_task))
             else:
-                task = metric.compute(context, self.config)
-            tasks.append((metric.name, task))
+                metric_task = metric.compute(context, self.config)
+                tasks.append((metric.name, metric_task))
 
         # Execute all tasks concurrently
         results = {}
@@ -176,7 +177,7 @@ class MetricScorer:
 
     async def _compute_size_metric_with_latency(
         self, metric, context: ModelContext
-    ) -> tuple:
+    ) -> tuple[SizeScore, int]:
         """Special handling for size score metric."""
         with measure_time() as get_latency:
             size_scores = await metric._calculate_size_scores(context, self.config)

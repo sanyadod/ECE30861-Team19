@@ -2,7 +2,7 @@
 Dataset quality metric - evaluates quality of referenced datasets.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from ..hf_api import HuggingFaceAPI
 from ..models import MetricResult, ModelContext
@@ -82,7 +82,7 @@ class DatasetQualityMetric(BaseMetric):
         return self._analyze_dataset_content(readme_content, None)
 
     def _analyze_dataset_content(
-        self, readme_content: str, dataset_info: Dict[str, Any] = None
+        self, readme_content: str, dataset_info: Optional[Dict[str, Any]] = None
     ) -> float:
         """Analyze content for 4 specific dataset quality fields."""
         score = 0.0
