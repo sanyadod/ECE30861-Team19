@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import yaml
 
-from src.models import MetricResult, ModelContext, ParsedURL, SizeScore, URLCategory
+from src.models import (MetricResult, ModelContext, ParsedURL, SizeScore,
+                        URLCategory)
 from src.scoring import MetricScorer
 
 

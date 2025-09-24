@@ -1,14 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from src.models import (
-    AuditResult,
-    MetricResult,
-    ModelContext,
-    ParsedURL,
-    SizeScore,
-    URLCategory,
-)
+from src.models import (AuditResult, MetricResult, ModelContext, ParsedURL,
+                        SizeScore, URLCategory)
 
 
 def test_url_category_enum():

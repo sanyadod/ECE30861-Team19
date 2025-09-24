@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.cli import process_urls
-from src.models import MetricResult, ModelContext, ParsedURL, SizeScore, URLCategory
+from src.models import (MetricResult, ModelContext, ParsedURL, SizeScore,
+                        URLCategory)
 from src.scoring import MetricScorer
 
 

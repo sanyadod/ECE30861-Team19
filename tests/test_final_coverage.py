@@ -65,7 +65,8 @@ def test_utils_regex_paths():
 
 def test_error_paths():
     """Test error handling paths in utilities."""
-    from src.utils import extract_model_size_from_text, parse_license_from_readme
+    from src.utils import (extract_model_size_from_text,
+                           parse_license_from_readme)
 
     # Test with invalid size values that cause ValueError
     size = extract_model_size_from_text("Model has NotANumber parameters")

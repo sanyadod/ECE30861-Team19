@@ -2,13 +2,9 @@
 Tests for utility functions.
 """
 
-from src.utils import (
-    check_readme_sections,
-    extract_model_size_from_text,
-    extract_performance_claims,
-    measure_time,
-    parse_license_from_readme,
-)
+from src.utils import (check_readme_sections, extract_model_size_from_text,
+                       extract_performance_claims, measure_time,
+                       parse_license_from_readme)
 
 
 def test_extract_model_size_7b():
