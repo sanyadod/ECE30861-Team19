@@ -38,14 +38,16 @@ def setup_logging() -> logging.Logger:
     log_file = os.getenv("LOG_FILE")
     if log_file:
         try:
+            # Validate we can write to the file path eagerly
+            # This will raise if directories don't exist or permissions are insufficient
+            with open(log_file, 'a'):
+                pass
             file_handler = logging.FileHandler(log_file)
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
-        except Exception:
-            # Fall back to console if file path is invalid/unwritable
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(formatter)
-            logger.addHandler(console_handler)
+        except Exception as e:
+            # Per specification: invalid log file path must cause startup failure
+            raise SystemExit(1) from e
     else:
         # Default to stderr (not stdout to avoid interfering with NDJSON output)
         console_handler = logging.StreamHandler()

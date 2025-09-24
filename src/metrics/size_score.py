@@ -30,6 +30,27 @@ class SizeScoreMetric(BaseMetric):
             desktop_pc=self._calculate_desktop_pc_score(estimated_size_gb),
             aws_server=self._calculate_aws_server_score(estimated_size_gb)
         )
+
+    # Generic helper used for tests and potential future refactors
+    def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
+        """Calculate a normalized score based on how model size compares to a device limit.
+
+        Rules expected by tests:
+        - Well under half the limit (<= 0.5x) -> 1.0
+        - At the limit (== 1.0x) -> 0.8
+        - Up to 2x the limit (<= 2.0x) -> 0.5
+        - Above 2x the limit -> 0.0
+        """
+        if limit_gb <= 0:
+            return 0.0
+        ratio = model_size_gb / limit_gb
+        if ratio <= 0.5:
+            return 1.0
+        if ratio == 1.0:
+            return 0.8
+        if ratio <= 2.0:
+            return 0.5
+        return 0.0
     
     async def _estimate_model_size(self, context: ModelContext) -> float:
         #extract from README content

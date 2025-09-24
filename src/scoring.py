@@ -190,21 +190,37 @@ class MetricScorer:
         total_weight = 0.0
         
         for metric_name, result in metric_results.items():
-            if metric_name == 'size_score' or metric_name.endswith('_latency'):
-                continue  # Skip size_score object and latency fields
+            if metric_name.endswith('_latency'):
+                continue  # Skip latency fields
+            
+            if metric_name == 'size_score' and isinstance(result, SizeScore):
+                weight = weights.get('size_score', 0.0)
+                avg_size_score = (
+                    result.raspberry_pi + result.jetson_nano + result.desktop_pc + result.aws_server
+                ) / 4.0
+                total_score += avg_size_score * weight
+                total_weight += weight
+                continue
             
             weight = weights.get(metric_name, 0.0)
             if isinstance(result, MetricResult):
                 total_score += result.score * weight
                 total_weight += weight
         
-        # Handle size score specially (max across devices as per specification)
-        size_score = metric_results.get('size_score')
-        if isinstance(size_score, SizeScore):
-            size_weight = weights.get('size_score', 0.0)
-            max_size_score = max(size_score.raspberry_pi, size_score.jetson_nano, 
-                                size_score.desktop_pc, size_score.aws_server)
-            total_score += max_size_score * size_weight
-            total_weight += size_weight
-        
-        return total_score / max(total_weight, 1.0)
+        # If total_weight is zero (e.g., config missing), return average of present scores
+        if total_weight == 0.0:
+            present_scores: List[float] = []
+            for metric_name, result in metric_results.items():
+                if metric_name.endswith('_latency'):
+                    continue
+                if isinstance(result, MetricResult):
+                    present_scores.append(result.score)
+            # Include size_score as average across devices if present
+            size_score = metric_results.get('size_score')
+            if isinstance(size_score, SizeScore):
+                present_scores.append(
+                    (size_score.raspberry_pi + size_score.jetson_nano + size_score.desktop_pc + size_score.aws_server) / 4.0
+                )
+            return sum(present_scores) / max(len(present_scores), 1)
+
+        return total_score / total_weight

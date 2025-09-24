@@ -38,14 +38,20 @@ def _parse_huggingface_url(url: str, parsed) -> ParsedURL:
         category = URLCategory.DATASET
         owner = path_parts[1] if len(path_parts) > 1 else None
         repo = path_parts[2] if len(path_parts) > 2 else None
-        # For datasets, prefer repo-only name if available
-        name = repo if repo else (url.split("/")[-1])
+        # For datasets, set name as "owner/repo" when both present
+        if owner and repo:
+            name = f"{owner}/{repo}"
+        else:
+            name = repo if repo else (url.split("/")[-1])
     else:
         category = URLCategory.MODEL
         owner = path_parts[0] if len(path_parts) > 0 else None
         repo = path_parts[1] if len(path_parts) > 1 else None
-        # For models, use only the repo/model name without owner
-        name = repo if repo else (url.split("/")[-1])
+        # For models, set name as "owner/repo" when both present
+        if owner and repo:
+            name = f"{owner}/{repo}"
+        else:
+            name = repo if repo else (url.split("/")[-1])
     
     return ParsedURL(
         url=url,

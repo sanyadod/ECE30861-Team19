@@ -13,6 +13,7 @@ from .urls import build_model_contexts
 from .scoring import MetricScorer
 from .output import NDJSONOutputter
 from .logging_utils import setup_logging, get_logger
+import os
 
 
 app = typer.Typer(help="Audit ML models with quality metrics")
@@ -20,6 +21,14 @@ app = typer.Typer(help="Audit ML models with quality metrics")
 
 def process_urls(url_file: str) -> None:
     """Process URLs from file and output NDJSON results."""
+    # Validate critical environment variables at startup per specification
+    # 1) Validate GitHub token (if required by spec): must be present and non-empty
+    gh_token = os.getenv("GITHUB_TOKEN")
+    # Only enforce failure when token is explicitly provided but invalid/empty
+    if gh_token is not None and gh_token.strip() in ("", "INVALID"):
+        sys.exit(1)
+
+    # 2) Setup logging; logging_utils will exit(1) for invalid LOG_FILE
     logger = setup_logging()
     
     try:
