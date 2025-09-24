@@ -3,11 +3,14 @@ Tests for environment variable validation at startup.
 """
 
 import os
+import subprocess
+import sys
 import tempfile
 from unittest.mock import patch
+
 import pytest
 
-from src.cli import _validate_environment
+from src.cli import _validate_environment, app
 
 
 def test_github_token_validation_valid():
@@ -126,8 +129,6 @@ def test_both_validations_fail():
 
 def test_cli_command_validation():
     """Test that CLI commands validate environment variables."""
-    from src.cli import app
-
     # Test that install command validates environment
     with patch.dict(os.environ, {"GITHUB_TOKEN": "INVALID"}):
         with pytest.raises(SystemExit) as exc_info:
@@ -143,9 +144,6 @@ def test_cli_command_validation():
 
 def test_run_script_validation():
     """Test that the run script validates environment variables."""
-    import subprocess
-    import sys
-
     # Create a temporary URL file for testing
     with tempfile.NamedTemporaryFile(
         mode='w', delete=False, suffix='.txt'
