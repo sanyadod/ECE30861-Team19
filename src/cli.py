@@ -19,12 +19,20 @@ from .urls import build_model_contexts
 app = typer.Typer(help="Audit ML models with quality metrics")
 
 
+def _looks_like_github_pat(token: str) -> bool:
+    """Check if token looks like a valid GitHub Personal Access Token."""
+    classic = re.compile(r"^gh[pousr]_[A-Za-z0-9]{20,}$")
+    finegrained = re.compile(r"^github_pat_[A-Za-z0-9_]{20,}$")
+    return bool(classic.match(token) or finegrained.match(token))
+
+
 def _validate_environment() -> None:
     """Validate critical environment variables at startup."""
-    # 1) Validate GitHub token: must be present and non-empty if provided
+    # 1) Validate GitHub token
     gh_token = os.getenv("GITHUB_TOKEN")
-    if gh_token is not None and (not gh_token.strip() or gh_token.strip() == "INVALID"):
-        sys.exit(1)
+    if gh_token is not None:
+        if not gh_token.strip() or not _looks_like_github_pat(gh_token.strip()):
+            sys.exit(1)
 
     # 2) Setup logging; logging_utils will exit(1) for invalid LOG_FILE
     setup_logging()
