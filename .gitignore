@@ -110,3 +110,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Processing logs
+processing_log_*.txt

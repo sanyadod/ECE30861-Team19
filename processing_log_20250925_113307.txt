@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "<string>", line 4, in <module>
-    from src.cli import _validate_environment, process_urls
-  File "/Users/sanyadod/Documents/ECE30861-Team19/src/cli.py", line 12, in <module>
-    import typer
-ModuleNotFoundError: No module named 'typer'
