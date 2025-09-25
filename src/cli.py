@@ -32,6 +32,7 @@ def _validate_environment() -> None:
     gh_token = os.getenv("GITHUB_TOKEN")
     if gh_token is not None:
         if not gh_token.strip() or not _looks_like_github_pat(gh_token.strip()):
+            # Use stderr for critical validation errors before logging is set up
             print("Error: Invalid GITHUB_TOKEN format", file=sys.stderr)
             sys.exit(1)
 
@@ -55,14 +56,14 @@ def process_urls(url_file: str) -> None:
             urls = tokens
 
         if not urls:
-            print("Error: No URLs found in file", file=sys.stderr)
+            logger.error("No URLs found in file")
             sys.exit(1)
 
         # Build model contexts
         contexts = build_model_contexts(urls)
 
         if not contexts:
-            print("Error: No model URLs found", file=sys.stderr)
+            logger.error("No model URLs found")
             sys.exit(1)
 
         logger.info(f"Processing {len(contexts)} models")
@@ -71,10 +72,10 @@ def process_urls(url_file: str) -> None:
         asyncio.run(_process_contexts_async(contexts))
 
     except FileNotFoundError:
-        print(f"Error: URL file not found: {url_file}", file=sys.stderr)
+        logger.error(f"URL file not found: {url_file}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error processing URLs: {e}", file=sys.stderr)
+        logger.error(f"Error processing URLs: {e}")
         sys.exit(1)
 
 
@@ -97,7 +98,7 @@ async def _process_contexts_async(contexts: List) -> None:
 
     # Exit with error if no models were successfully processed
     if success_count == 0:
-        print("Error: No models were successfully processed", file=sys.stderr)
+        logger.error("No models were successfully processed")
         sys.exit(1)
 
 
