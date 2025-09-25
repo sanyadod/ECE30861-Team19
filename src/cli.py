@@ -103,6 +103,9 @@ async def _process_contexts_async(contexts: List) -> None:
 
 def run_tests() -> None:
     """Run the test suite and report results."""
+    # Validate environment variables at startup (consistent with CLI command)
+    _validate_environment()
+    
     try:
         # Run pytest with coverage
         result = subprocess.run(
