@@ -20,7 +20,7 @@ def setup_logging() -> logging.Logger:
         try:
             # Validate we can write to the file path eagerly
             # This will raise if directories don't exist or permissions are insufficient
-            with open(log_file, "a"):
+            with open(log_file, "r+"):
                 pass
         except Exception as e:
             # Per specification: invalid log file path must cause startup failure
