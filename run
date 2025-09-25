@@ -29,20 +29,93 @@ install_deps() {
     fi
 }
 
-# Function to run tests
+# Function to run tests (converted from Python run_tests function)
 run_tests() {
     echo "Running test suite..."
     cd "$PROJECT_ROOT"
-    if python3 -c "
+    
+    # Validate environment variables at startup (consistent with CLI command)
+    if ! python3 -c "
 import sys
 sys.path.insert(0, '.')
-from src.cli import run_tests
-run_tests()
+from src.cli import _validate_environment
+_validate_environment()
 "; then
-        exit 0
-    else
-        echo "Test execution failed" >&2
+        echo "Environment validation failed" >&2
         exit 1
+    fi
+    
+    # Run pytest with coverage and capture output
+    echo "Running pytest with coverage..."
+    if ! pytest_output=$(python3 -m pytest --cov=src --cov-report=term-missing --tb=short 2>&1); then
+        pytest_exit_code=$?
+    else
+        pytest_exit_code=0
+    fi
+    
+    # Parse test results
+    test_summary=""
+    coverage_summary=""
+    passed=0
+    failed=0
+    errors=0
+    total=0
+    coverage=0
+    
+    # Look for test summary line
+    while IFS= read -r line; do
+        # Look for test summary - handle different pytest output formats
+        if [[ ("$line" == *"passed"* && ("$line" == *"failed"* || "$line" == *"error"*)) || "$line" == *"test session starts"* ]]; then
+            test_summary="$line"
+        elif [[ "$line" == *"TOTAL"* && "$line" == *"%"* ]]; then
+            # Extract coverage percentage
+            for part in $line; do
+                if [[ "$part" == *"%" ]]; then
+                    coverage_summary="${part%\%}"
+                    break
+                fi
+            done
+        fi
+    done <<< "$pytest_output"
+    
+    # Parse numbers from pytest output using grep and regex
+    if [[ -n "$test_summary" ]]; then
+        # Try multiple patterns to match different pytest output formats
+        passed=$(echo "$test_summary" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+        failed=$(echo "$test_summary" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
+        errors=$(echo "$test_summary" | grep -oE '[0-9]+ error' | grep -oE '[0-9]+' || echo "0")
+        
+        # Also try to find test counts in other formats
+        if [[ "$passed" == "0" ]]; then
+            passed=$(echo "$pytest_output" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' | head -1 || echo "0")
+        fi
+        if [[ "$failed" == "0" ]]; then
+            failed=$(echo "$pytest_output" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1 || echo "0")
+        fi
+        if [[ "$errors" == "0" ]]; then
+            errors=$(echo "$pytest_output" | grep -oE '[0-9]+ error' | grep -oE '[0-9]+' | head -1 || echo "0")
+        fi
+        
+        # Convert to integers
+        passed=$((passed))
+        failed=$((failed))
+        errors=$((errors))
+        total=$((passed + failed + errors))
+    fi
+    
+    # Format coverage as integer
+    if [[ -n "$coverage_summary" ]]; then
+        coverage=$(printf "%.0f" "$coverage_summary")
+    fi
+    
+    # Format output as required
+    echo "${passed}/${total} test cases passed. ${coverage}% line coverage achieved."
+    
+    # Exit with error if tests failed OR coverage < 80%
+    if [[ $pytest_exit_code -ne 0 || $coverage -lt 80 ]]; then
+        exit 1
+    else
+        exit 0
     fi
 }
 
@@ -94,6 +167,6 @@ main() {
             ;;
     esac
 }
+
 # Run main function with all arguments
 main "$@"
-        
