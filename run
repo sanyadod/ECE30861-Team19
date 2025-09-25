@@ -131,16 +131,21 @@ process_urls() {
     
     echo "Processing URLs from: $url_file"
     cd "$PROJECT_ROOT"
+    
+    # Create a log file for counting object output
+    log_file="processing_log_$(date +%Y%m%d_%H%M%S).txt"
+    
     if python3 -c "
 import sys
 sys.path.insert(0, '.')
 from src.cli import _validate_environment, process_urls
 _validate_environment()
 process_urls('$url_file')
-"; then
+" 2>"$log_file"; then
+        echo "Processing completed. Log saved to: $log_file"
         exit 0
     else
-        echo "URL processing failed" >&2
+        echo "URL processing failed. Check log file: $log_file" >&2
         exit 1
     fi
 }
