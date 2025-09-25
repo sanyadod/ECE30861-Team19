@@ -128,7 +128,8 @@ def run_tests() -> None:
         coverage_summary = ""
 
         for line in lines:
-            if "passed" in line and "failed" in line:
+            # Look for test summary - handle different pytest output formats
+            if ("passed" in line and ("failed" in line or "error" in line)) or "test session starts" in line:
                 test_summary = line
             elif "TOTAL" in line and "%" in line:
                 parts = line.split()
@@ -138,19 +139,30 @@ def run_tests() -> None:
                         break
 
         # Parse numbers from pytest output
-        if test_summary:
-            # Extract passed/failed counts
-            import re
+        passed = 0
+        failed = 0
+        total = 0
 
+        if test_summary:
+            import re
+            
+            # Try multiple patterns to match different pytest output formats
             passed_match = re.search(r"(\d+) passed", test_summary)
             failed_match = re.search(r"(\d+) failed", test_summary)
+            error_match = re.search(r"(\d+) error", test_summary)
+            
+            # Also try to find test counts in other formats
+            if not passed_match:
+                passed_match = re.search(r"(\d+) passed", output)
+            if not failed_match:
+                failed_match = re.search(r"(\d+) failed", output)
+            if not error_match:
+                error_match = re.search(r"(\d+) error", output)
 
             passed = int(passed_match.group(1)) if passed_match else 0
             failed = int(failed_match.group(1)) if failed_match else 0
-            total = passed + failed
-        else:
-            passed = 0
-            total = 0
+            errors = int(error_match.group(1)) if error_match else 0
+            total = passed + failed + errors
 
         # Format output as required
         coverage = int(float(coverage_summary)) if coverage_summary else 0

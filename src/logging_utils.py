@@ -24,7 +24,8 @@ def setup_logging() -> logging.Logger:
                 pass
         except Exception as e:
             # Per specification: invalid log file path must cause startup failure
-            raise SystemExit(1) from e
+            print(f"Error: Invalid LOG_FILE path '{log_file}': {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Get log level from environment (0=silent, 1=info, 2=debug)
     log_level_env = os.getenv("LOG_LEVEL", "0")
