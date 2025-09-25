@@ -14,11 +14,11 @@ sys.path.insert(0, str(project_root))
 def main():
     """Main entry point for the CLI."""
     if len(sys.argv) < 2:
-        print("Usage: ./run <command>")
-        print("Commands:")
-        print("  install        - Install dependencies")
-        print("  test          - Run test suite")
-        print("  <URL_FILE>    - Process URLs from file")
+        print("Usage: ./run <command>", file=sys.stderr)
+        print("Commands:", file=sys.stderr)
+        print("  install        - Install dependencies", file=sys.stderr)
+        print("  test          - Run test suite", file=sys.stderr)
+        print("  <URL_FILE>    - Process URLs from file", file=sys.stderr)
         sys.exit(1)
     
     command = sys.argv[1]
@@ -27,13 +27,13 @@ def main():
         # Install dependencies in userland
         try:
             subprocess.check_call([
-                sys.executable, "-m", "pip", "install", "--user", 
+                sys.executable, "-m", "pip", "install", 
                 "-r", str(project_root / "requirements.txt")
             ])
             print("Dependencies installed successfully.")
             sys.exit(0)
         except subprocess.CalledProcessError as e:
-            print(f"Failed to install dependencies: {e}")
+            print(f"Failed to install dependencies: {e}", file=sys.stderr)
             sys.exit(1)
     
     elif command == "test":
@@ -42,17 +42,17 @@ def main():
             from src.cli import run_tests
             run_tests()
         except ImportError as e:
-            print(f"Failed to import test module: {e}")
+            print(f"Failed to import test module: {e}", file=sys.stderr)
             sys.exit(1)
         except Exception as e:
-            print(f"Test execution failed: {e}")
+            print(f"Test execution failed: {e}", file=sys.stderr)
             sys.exit(1)
     
     else:
         # Treat as URL file path
         url_file = Path(command)
         if not url_file.exists():
-            print(f"Error: URL file '{url_file}' does not exist.")
+            print(f"Error: URL file '{url_file}' does not exist.", file=sys.stderr)
             sys.exit(1)
         
         try:
@@ -61,10 +61,10 @@ def main():
             _validate_environment()
             process_urls(str(url_file.absolute()))
         except ImportError as e:
-            print(f"Failed to import CLI module: {e}")
+            print(f"Failed to import CLI module: {e}", file=sys.stderr)
             sys.exit(1)
         except Exception as e:
-            print(f"URL processing failed: {e}")
+            print(f"URL processing failed: {e}", file=sys.stderr)
             sys.exit(1)
 
 if __name__ == "__main__":

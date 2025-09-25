@@ -234,6 +234,9 @@ class MetricScorer:
                     )
                     / 4.0
                 )
-            return sum(present_scores) / max(len(present_scores), 1)
+            net_score = sum(present_scores) / max(len(present_scores), 1)
+        else:
+            net_score = total_score / total_weight
 
-        return total_score / total_weight
+        # Clamp net_score to [0,1] as required by spec
+        return max(0.0, min(1.0, net_score))

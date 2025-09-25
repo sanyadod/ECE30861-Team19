@@ -98,6 +98,36 @@ def test_log_file_validation_not_provided():
         _validate_environment()
 
 
+def test_log_level_validation_valid():
+    """Test valid LOG_LEVEL values."""
+    with patch.dict(os.environ, {"LOG_LEVEL": "0"}):
+        _validate_environment()
+    
+    with patch.dict(os.environ, {"LOG_LEVEL": "1"}):
+        _validate_environment()
+    
+    with patch.dict(os.environ, {"LOG_LEVEL": "2"}):
+        _validate_environment()
+
+
+def test_log_level_validation_invalid():
+    """Test invalid LOG_LEVEL values."""
+    with patch.dict(os.environ, {"LOG_LEVEL": "3"}):
+        with pytest.raises(SystemExit) as exc_info:
+            _validate_environment()
+        assert exc_info.value.code == 1
+    
+    with patch.dict(os.environ, {"LOG_LEVEL": "-1"}):
+        with pytest.raises(SystemExit) as exc_info:
+            _validate_environment()
+        assert exc_info.value.code == 1
+    
+    with patch.dict(os.environ, {"LOG_LEVEL": "invalid"}):
+        with pytest.raises(SystemExit) as exc_info:
+            _validate_environment()
+        assert exc_info.value.code == 1
+
+
 def test_both_validations_together():
     """Test both validations work together."""
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:

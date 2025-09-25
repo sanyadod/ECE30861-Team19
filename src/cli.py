@@ -32,6 +32,7 @@ def _validate_environment() -> None:
     gh_token = os.getenv("GITHUB_TOKEN")
     if gh_token is not None:
         if not gh_token.strip() or not _looks_like_github_pat(gh_token.strip()):
+            print("Error: Invalid GITHUB_TOKEN format", file=sys.stderr)
             sys.exit(1)
 
     # 2) Setup logging; logging_utils will exit(1) for invalid LOG_FILE
@@ -54,14 +55,14 @@ def process_urls(url_file: str) -> None:
             urls = tokens
 
         if not urls:
-            logger.error("No URLs found in file")
+            print("Error: No URLs found in file", file=sys.stderr)
             sys.exit(1)
 
         # Build model contexts
         contexts = build_model_contexts(urls)
 
         if not contexts:
-            logger.error("No model URLs found")
+            print("Error: No model URLs found", file=sys.stderr)
             sys.exit(1)
 
         logger.info(f"Processing {len(contexts)} models")
@@ -70,10 +71,10 @@ def process_urls(url_file: str) -> None:
         asyncio.run(_process_contexts_async(contexts))
 
     except FileNotFoundError:
-        logger.error(f"URL file not found: {url_file}")
+        print(f"Error: URL file not found: {url_file}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Error processing URLs: {e}")
+        print(f"Error processing URLs: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -81,16 +82,23 @@ async def _process_contexts_async(contexts: List) -> None:
     """Async processing of model contexts."""
     scorer = MetricScorer()
     outputter = NDJSONOutputter()
+    success_count = 0
 
     # Process each model context
     for context in contexts:
         try:
             result = await scorer.score_model(context)
             outputter.output_single_result(result)
+            success_count += 1
         except Exception as e:
             logger = get_logger()
             logger.error(f"Error scoring model {context.model_url.name}: {e}")
             # Continue with next model rather than failing completely
+
+    # Exit with error if no models were successfully processed
+    if success_count == 0:
+        print("Error: No models were successfully processed", file=sys.stderr)
+        sys.exit(1)
 
 
 def run_tests() -> None:
@@ -150,11 +158,14 @@ def run_tests() -> None:
             f"{passed}/{total} test cases passed. {coverage}% line coverage achieved."
         )
 
-        # Exit with pytest result code only (do not gate on coverage percentage)
-        sys.exit(0 if result.returncode == 0 else 1)
+        # Exit with error if tests failed OR coverage < 80%
+        if result.returncode != 0 or coverage < 80:
+            sys.exit(1)
+        else:
+            sys.exit(0)
 
     except Exception as e:
-        print(f"Error running tests: {e}")
+        print(f"Error running tests: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -166,7 +177,7 @@ def install():
 
     try:
         subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"]
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
         )
         typer.echo("Dependencies installed successfully.")
     except subprocess.CalledProcessError as e:

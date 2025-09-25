@@ -4,6 +4,7 @@ Logging utilities
 
 import logging
 import os
+import sys
 
 
 def setup_logging() -> logging.Logger:
@@ -30,7 +31,13 @@ def setup_logging() -> logging.Logger:
     try:
         log_level_num = int(log_level_env)
     except ValueError:
-        log_level_num = 0
+        print(f"Error: LOG_LEVEL must be an integer, got '{log_level_env}'", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate LOG_LEVEL is in {0,1,2}
+    if log_level_num not in {0, 1, 2}:
+        print(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}", file=sys.stderr)
+        sys.exit(1)
 
     # Map to logging levels
     if log_level_num == 0:
@@ -38,7 +45,7 @@ def setup_logging() -> logging.Logger:
         return logger
     elif log_level_num == 1:
         logger.setLevel(logging.INFO)
-    else:  # log_level_num >= 2
+    else:  # log_level_num == 2
         logger.setLevel(logging.DEBUG)
 
     # Create formatter

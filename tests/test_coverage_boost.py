@@ -84,10 +84,11 @@ def test_logging_edge_cases():
     """Test logging configuration edge cases."""
     from src.logging_utils import setup_logging
 
-    # Test with invalid log level
+    # Test with invalid log level - should exit with error
     with patch.dict(os.environ, {"LOG_LEVEL": "invalid"}):
-        logger = setup_logging()
-        assert logger.level > 50  # Should default to silent
+        with pytest.raises(SystemExit) as exc_info:
+            setup_logging()
+        assert exc_info.value.code == 1
 
     # Test with debug level
     with patch.dict(os.environ, {"LOG_LEVEL": "2"}):
