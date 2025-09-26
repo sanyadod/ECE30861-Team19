@@ -33,12 +33,19 @@ class SizeScoreMetric(BaseMetric):
         # estimate model size from various sources
         estimated_size_gb = await self._estimate_model_size(context)
 
-        # Use exact thresholds from specification
+        # Get thresholds from config, with fallbacks to hardcoded values
+        size_limits = config.get("thresholds", {}).get("size_limits", {})
+        raspberry_pi_limit = size_limits.get("raspberry_pi", 2.0)
+        jetson_nano_limit = size_limits.get("jetson_nano", 8.0)
+        desktop_pc_limit = size_limits.get("desktop_pc", 32.0)
+        aws_server_limit = size_limits.get("aws_server", 128.0)
+
+        # Use config thresholds with generic device score calculation
         return SizeScore(
-            raspberry_pi=self._calculate_raspberry_pi_score(estimated_size_gb),
-            jetson_nano=self._calculate_jetson_nano_score(estimated_size_gb),
-            desktop_pc=self._calculate_desktop_pc_score(estimated_size_gb),
-            aws_server=self._calculate_aws_server_score(estimated_size_gb),
+            raspberry_pi=self._calculate_device_score(estimated_size_gb, raspberry_pi_limit),
+            jetson_nano=self._calculate_device_score(estimated_size_gb, jetson_nano_limit),
+            desktop_pc=self._calculate_device_score(estimated_size_gb, desktop_pc_limit),
+            aws_server=self._calculate_device_score(estimated_size_gb, aws_server_limit),
         )
 
     # Generic helper used for tests and potential future refactors
@@ -102,37 +109,3 @@ class SizeScoreMetric(BaseMetric):
         # default assumption for unknown
         return 2.0
 
-    def _calculate_raspberry_pi_score(self, model_size_gb: float) -> float:
-        """Raspberry Pi: <100MB → 1.0, 100–500MB → 0.5, >500MB → 0.0"""
-        size_mb = model_size_gb * 1024
-        if size_mb < 100:
-            return 1.0
-        elif size_mb <= 500:
-            return 0.5
-        else:
-            return 0.0
-
-    def _calculate_jetson_nano_score(self, model_size_gb: float) -> float:
-        """Jetson Nano: <2GB → 1.0, 2–8GB → 0.5, >8GB → 0.0"""
-        if model_size_gb < 2.0:
-            return 1.0
-        elif model_size_gb <= 8.0:
-            return 0.5
-        else:
-            return 0.0
-
-    def _calculate_desktop_pc_score(self, model_size_gb: float) -> float:
-        """Desktop PC: <10GB → 1.0, 10–50GB → 0.5, >50GB → 0.0"""
-        if model_size_gb < 10.0:
-            return 1.0
-        elif model_size_gb <= 50.0:
-            return 0.5
-        else:
-            return 0.0
-
-    def _calculate_aws_server_score(self, model_size_gb: float) -> float:
-        """AWS Server: <100GB → 1.0, >100GB → 0.5"""
-        if model_size_gb < 100.0:
-            return 1.0
-        else:
-            return 0.5

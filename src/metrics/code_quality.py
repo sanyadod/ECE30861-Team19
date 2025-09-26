@@ -39,7 +39,8 @@ class CodeQualityMetric(BaseMetric):
         git_inspector = GitInspector()
 
         try:
-            for code_repo in context.code_repos:
+            # Limit to first 2 repositories to prevent excessive processing
+            for code_repo in context.code_repos[:2]:
                 if code_repo.platform == "github":
                     repo_path = git_inspector.clone_repo(code_repo)
                     if repo_path:

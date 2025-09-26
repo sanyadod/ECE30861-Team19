@@ -35,7 +35,8 @@ class BusFactorMetric(BaseMetric):
         if context.code_repos:
             git_inspector = GitInspector()
             try:
-                for code_repo in context.code_repos:
+                # Limit to first 2 repositories to prevent excessive processing
+                for code_repo in context.code_repos[:2]:
                     repo_path = git_inspector.clone_repo(code_repo)
                     if repo_path:
                         analysis = git_inspector.analyze_repository(repo_path)
