@@ -33,6 +33,7 @@ def _validate_environment() -> None:
     if gh_token is not None:
         if not gh_token.strip() or not _looks_like_github_pat(gh_token.strip()):
             # Use stderr for critical validation errors before logging is set up
+            # This is necessary before logging is initialized
             print("Error: Invalid GITHUB_TOKEN format", file=sys.stderr)
             sys.exit(1)
 
@@ -46,14 +47,33 @@ def process_urls(url_file: str) -> None:
     logger = get_logger()
 
     try:
-        # Read URLs from file (support comma and/or whitespace separated entries)
+        # Read URLs from file - split on newlines only, handle empty lines
         with open(url_file, "r") as f:
-            content = f.read()
-            # Split on commas and whitespace, then strip
-            tokens = [
-                token.strip() for token in re.split(r"[\s,]+", content) if token.strip()
-            ]
-            urls = tokens
+            lines = f.readlines()
+            
+        # Process each line, handling both comma-separated and line-separated URLs
+        urls = []
+        for line in lines:
+            line = line.strip()
+            if not line:  # Skip empty lines
+                continue
+                
+            # Split on commas if present, otherwise treat as single URL
+            if ',' in line:
+                line_urls = [url.strip() for url in line.split(',') if url.strip()]
+                urls.extend(line_urls)
+            else:
+                urls.append(line)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_urls = []
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                unique_urls.append(url)
+        
+        urls = unique_urls
 
         if not urls:
             logger.error("No URLs found in file")
@@ -171,7 +191,8 @@ def run_tests() -> None:
         # Format output as required
         coverage = int(float(coverage_summary)) if coverage_summary else 0
         print(
-            f"{passed}/{total} test cases passed. {coverage}% line coverage achieved."
+            f"{passed}/{total} test cases passed. {coverage}% line coverage achieved.",
+            file=sys.stderr
         )
 
         # Exit with error if tests failed OR coverage < 80%

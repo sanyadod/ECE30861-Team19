@@ -143,7 +143,6 @@ _validate_environment()
 process_urls('$url_file')
 " 2>"$log_file"; then
         # Success - JSON was output to stdout, log info goes to stderr
-        echo "Processing completed. Log saved to: $log_file" >&2
         exit 0
     else
         # Failure - error info is in log file

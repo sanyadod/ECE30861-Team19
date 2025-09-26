@@ -24,7 +24,12 @@ def setup_logging() -> logging.Logger:
                 pass
         except Exception as e:
             # Per specification: invalid log file path must cause startup failure
-            print(f"Error: Invalid LOG_FILE path '{log_file}': {e}", file=sys.stderr)
+            # Use logger if available, otherwise stderr
+            try:
+                logger = get_logger()
+                logger.critical(f"Error: Invalid LOG_FILE path '{log_file}': {e}")
+            except:
+                print(f"Error: Invalid LOG_FILE path '{log_file}': {e}", file=sys.stderr)
             sys.exit(1)
 
     # Get log level from environment (0=silent, 1=info, 2=debug)
@@ -32,12 +37,22 @@ def setup_logging() -> logging.Logger:
     try:
         log_level_num = int(log_level_env)
     except ValueError:
-        print(f"Error: LOG_LEVEL must be an integer, got '{log_level_env}'", file=sys.stderr)
+        # Use logger if available, otherwise stderr
+        try:
+            logger = get_logger()
+            logger.critical(f"Error: LOG_LEVEL must be an integer, got '{log_level_env}'")
+        except:
+            print(f"Error: LOG_LEVEL must be an integer, got '{log_level_env}'", file=sys.stderr)
         sys.exit(1)
 
     # Validate LOG_LEVEL is in {0,1,2}
     if log_level_num not in {0, 1, 2}:
-        print(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}", file=sys.stderr)
+        # Use logger if available, otherwise stderr
+        try:
+            logger = get_logger()
+            logger.critical(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}")
+        except:
+            print(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}", file=sys.stderr)
         sys.exit(1)
 
     # Map to logging levels
