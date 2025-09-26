@@ -58,9 +58,9 @@ def process_urls(url_file: str) -> None:
                 continue
                 
             # Split on commas - expect exactly 3 parts: code, dataset, model
-            parts = [url.strip() for url in line.split(',') if url.strip()]
+            parts = [url.strip() for url in line.split(',')]
             if len(parts) != 3:
-                logger.warning(f"Skipping malformed line (expected 3 URLs): {line}")
+                logger.warning(f"Skipping malformed line (expected 3 parts): {line}")
                 continue
                 
             code_url, dataset_url, model_url = parts
@@ -69,15 +69,21 @@ def process_urls(url_file: str) -> None:
             from .urls import parse_url
             from .models import ModelContext
             
-            code_parsed = parse_url(code_url)
-            dataset_parsed = parse_url(dataset_url)
-            model_parsed = parse_url(model_url)
+            # Only parse non-empty URLs
+            code_parsed = parse_url(code_url) if code_url else None
+            dataset_parsed = parse_url(dataset_url) if dataset_url else None
+            model_parsed = parse_url(model_url) if model_url else None
             
-            # Create model context directly with the known structure
+            # Skip if model URL is empty (required)
+            if not model_url:
+                logger.warning(f"Skipping line with empty model URL: {line}")
+                continue
+            
+            # Create model context with available resources
             context = ModelContext(
                 model_url=model_parsed,
-                datasets=[dataset_parsed],
-                code_repos=[code_parsed]
+                datasets=[dataset_parsed] if dataset_parsed else [],
+                code_repos=[code_parsed] if code_parsed else []
             )
             contexts.append(context)
 
