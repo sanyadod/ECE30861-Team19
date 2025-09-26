@@ -26,21 +26,7 @@ class SizeScoreMetric(BaseMetric):
             )
 
         return MetricResult(
-            score={
-                "raspberry_pi": size_score.raspberry_pi,
-                 "jetson_nano": size_score.jetson_nano,
-                 "desktop_pc": size_score.desktop_pc,
-                 "aws_server": size_score.aws_server,
-            }, 
-            latency=get_latency())
-        # return {
-        #     "size_score": {
-        #         "raspberry_pi": size_score.raspberry_pi,
-        #         "jetson_nano": size_score.jetson_nano,
-        #         "desktop_pc": size_score.desktop_pc,
-        #         "aws_server": size_score.aws_server,
-        #     },
-        # "size_score_latency": get_latency(),
+            score=max_score, latency=get_latency())
 
     async def _calculate_size_scores(
         self, context: ModelContext, config: Dict[str, Any]
