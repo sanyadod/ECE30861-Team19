@@ -5,6 +5,7 @@ Git repository inspection
 import os
 import shutil
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -22,13 +23,14 @@ logger = get_logger()
 class GitInspector:
     """Git repository inspector using Dulwich."""
 
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: Optional[str] = None, timeout: int = 30):
         self.cache_dir = cache_dir or tempfile.mkdtemp(prefix="src_git_cache_")
+        self.timeout = timeout
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def clone_repo(self, repo_url: ParsedURL) -> Optional[str]:
         """
-        Clone a repository to cache directory.
+        Clone a repository to cache directory with timeout handling.
 
         Returns path to cloned repo or None if failed.
         """
@@ -49,12 +51,46 @@ class GitInspector:
 
         try:
             logger.info(f"Cloning {repo_url.url} to {clone_path}")
-            porcelain.clone(
-                repo_url.url, clone_path, depth=50
-            )  # Shallow clone for efficiency
-            return clone_path
+            
+            # Use threading to implement timeout
+            result = [None]
+            exception = [None]
+            
+            def clone_worker():
+                try:
+                    # Use smaller depth for faster cloning
+                    porcelain.clone(
+                        repo_url.url, clone_path, depth=5
+                    )  # Much smaller depth for efficiency
+                    result[0] = clone_path
+                except Exception as e:
+                    exception[0] = e
+            
+            # Start clone in separate thread
+            thread = threading.Thread(target=clone_worker)
+            thread.daemon = True
+            thread.start()
+            
+            # Wait for completion or timeout
+            thread.join(timeout=self.timeout)
+            
+            if thread.is_alive():
+                logger.warning(f"Timeout cloning {repo_url.url} after {self.timeout}s")
+                # Clean up partial clone
+                if os.path.exists(clone_path):
+                    shutil.rmtree(clone_path, ignore_errors=True)
+                return None
+            
+            if exception[0]:
+                raise exception[0]
+                
+            return result[0]
+                
         except Exception as e:
             logger.warning(f"Failed to clone {repo_url.url}: {e}")
+            # Clean up partial clone
+            if os.path.exists(clone_path):
+                shutil.rmtree(clone_path, ignore_errors=True)
             return None
 
     def analyze_repository(self, repo_path: str) -> Dict[str, Any]:
