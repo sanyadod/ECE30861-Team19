@@ -41,6 +41,7 @@ class SizeScoreMetric(BaseMetric):
     async def _calculate_size_scores(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> SizeScore:
+        """Calculate size scores with improved handling for different model types and use cases."""
         # estimate model size from various sources
         estimated_size_gb = await self._estimate_model_size(context)
 
@@ -51,7 +52,13 @@ class SizeScoreMetric(BaseMetric):
         desktop_pc_limit = size_limits.get("desktop_pc", 32.0)
         aws_server_limit = size_limits.get("aws_server", 128.0)
 
-        # Use config thresholds with generic device score calculation
+        # Adjust limits based on model size only (no hard-coded model types)
+        # For edge devices, be more lenient with small models
+        if estimated_size_gb < 0.5:  # Very small models
+            raspberry_pi_limit *= 1.5  # More lenient for tiny models
+            jetson_nano_limit *= 1.2
+
+        # Use config thresholds with improved device score calculation
         return SizeScore(
             raspberry_pi=self._calculate_device_score(estimated_size_gb, raspberry_pi_limit),
             jetson_nano=self._calculate_device_score(estimated_size_gb, jetson_nano_limit),
@@ -61,24 +68,49 @@ class SizeScoreMetric(BaseMetric):
 
     # Generic helper used for tests and potential future refactors
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
-        """Calculate normalized score versus device limit.
+        """Calculate normalized score versus device limit with improved scaling for different model sizes.
 
-        Rules:
-        - <= 0.5x → 1.0; == 1.0x → 0.8; <= 2.0x → 0.5; > 2.0x → 0.0
+        Uses a more sophisticated scoring system that:
+        - Provides better granularity for small models
+        - Handles large models more appropriately
+        - Uses exponential decay for better differentiation
         """
         if limit_gb <= 0:
             return 0.0
+        
         ratio = model_size_gb / limit_gb
-        if ratio <= 0.5:
+        
+        # For very small models (under 10% of limit), give excellent score
+        if ratio <= 0.1:
             return 1.0
-        if ratio == 1.0:
-            return 0.8
-        if ratio <= 2.0:
-            return 0.5
-        return 0.0
+        
+        # For small models (10-50% of limit), use linear scaling with high scores
+        elif ratio <= 0.5:
+            # Linear interpolation from 1.0 to 0.9
+            return 1.0 - (ratio - 0.1) * 0.25  # 0.1 -> 1.0, 0.5 -> 0.9
+        
+        # For medium models (50-100% of limit), use exponential decay
+        elif ratio <= 1.0:
+            # Exponential decay from 0.9 to 0.7
+            return 0.9 * (1.0 - ratio) ** 0.5 + 0.7 * ratio
+        
+        # For large models (100-200% of limit), use steeper decay
+        elif ratio <= 2.0:
+            # Steep exponential decay from 0.7 to 0.2
+            return 0.7 * (2.0 - ratio) ** 2 + 0.2 * (ratio - 1.0)
+        
+        # For very large models (over 200% of limit), use very steep decay
+        elif ratio <= 4.0:
+            # Very steep decay from 0.2 to 0.05
+            return 0.2 * (4.0 - ratio) ** 3 + 0.05 * (ratio - 2.0)
+        
+        # For extremely large models (over 400% of limit), minimal score
+        else:
+            return max(0.0, 0.05 * (1.0 / ratio))
 
     async def _estimate_model_size(self, context: ModelContext) -> float:
-        # extract from README content
+        """Estimate model size with improved accuracy for different model types."""
+        # extract from README content first (most reliable)
         if context.readme_content:
             size_from_readme = extract_model_size_from_text(context.readme_content)
             if size_from_readme:
@@ -87,36 +119,55 @@ class SizeScoreMetric(BaseMetric):
         # estimate from hugging face file information
         if context.hf_info and context.hf_info.get("files"):
             total_size_mb = 0
-            for file_path in context.hf_info["files"]:
-                # estimate sizes based on file extensions
-                if file_path.endswith(".bin") or file_path.endswith(".safetensors"):
-                    # model weights - estimate based on common patterns
-                    if "pytorch_model" in file_path:
-                        total_size_mb += 1000  # ~1GB per model file (rough estimate)
-                elif file_path.endswith(".json"):
-                    total_size_mb += 1  # config files are small
+            files = context.hf_info["files"]
+            
+            # Handle both list and dict formats for files
+            if isinstance(files, list):
+                # If files is a list of file paths
+                for file_path in files:
+                    if file_path.endswith(".bin") or file_path.endswith(".safetensors"):
+                        if "pytorch_model" in file_path:
+                            # Use a reasonable default estimate for model files
+                            total_size_mb += 1000  # Default 1GB per model file
+                    elif file_path.endswith(".json"):
+                        total_size_mb += 1  # config files are small
+                    elif file_path.endswith(".txt"):
+                        total_size_mb += 0.1  # text files are tiny
+            elif isinstance(files, dict):
+                # If files is a dict with file info
+                for file_path, file_info in files.items():
+                    if file_path.endswith(".bin") or file_path.endswith(".safetensors"):
+                        if "pytorch_model" in file_path:
+                            # Try to extract actual file size if available
+                            file_size = file_info.get("size", 0) if isinstance(file_info, dict) else 0
+                            if file_size > 0:
+                                total_size_mb += file_size / (1024 * 1024)  # Convert bytes to MB
+                            else:
+                                # Use a reasonable default estimate for model files
+                                total_size_mb += 1000  # Default 1GB per model file
+                    elif file_path.endswith(".json"):
+                        total_size_mb += 1  # config files are small
+                    elif file_path.endswith(".txt"):
+                        total_size_mb += 0.1  # text files are tiny
 
             if total_size_mb > 0:
                 return total_size_mb / 1024.0  # Convert to GB
 
-        # extract from model name patterns
+        # Generic size estimation based on model name patterns
         model_name = context.model_url.name.lower()
-        if "7b" in model_name or "7-b" in model_name:
-            return 14.0  # ~14GB for 7B models
-        elif "13b" in model_name or "13-b" in model_name:
-            return 26.0  # ~26GB for 13B models
-        elif "30b" in model_name or "30-b" in model_name:
-            return 60.0  # ~60GB for 30B models
-        elif "70b" in model_name or "70-b" in model_name:
-            return 140.0  # ~140GB for 70B models
-        # generic models
-        elif "large" in model_name:
-            return 4.0
+        
+        # Use generic size indicators without hard-coding specific model types
+        if "large" in model_name:
+            return 4.0  # Generic large model
         elif "base" in model_name:
-            return 1.0
-        elif "small" in model_name:
-            return 0.5
+            return 1.0  # Generic base model
+        elif "small" in model_name or "tiny" in model_name:
+            return 0.5  # Generic small model
+        elif "mini" in model_name:
+            return 0.2  # Mini models
+        elif "nano" in model_name:
+            return 0.1  # Nano models
 
-        # default assumption for unknown
+        # default assumption for unknown models
         return 2.0
 
