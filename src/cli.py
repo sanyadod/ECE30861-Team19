@@ -14,7 +14,6 @@ import typer
 from .logging_utils import get_logger, setup_logging
 from .output import NDJSONOutputter
 from .scoring import MetricScorer
-from .urls import build_model_contexts
 
 app = typer.Typer(help="Audit ML models with quality metrics")
 
@@ -51,39 +50,39 @@ def process_urls(url_file: str) -> None:
         with open(url_file, "r") as f:
             lines = f.readlines()
             
-        # Process each line, handling both comma-separated and line-separated URLs
-        urls = []
+        # Process each line as code, dataset, model triplets
+        contexts = []
         for line in lines:
             line = line.strip()
             if not line:  # Skip empty lines
                 continue
                 
-            # Split on commas if present, otherwise treat as single URL
-            if ',' in line:
-                line_urls = [url.strip() for url in line.split(',') if url.strip()]
-                urls.extend(line_urls)
-            else:
-                urls.append(line)
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_urls = []
-        for url in urls:
-            if url not in seen:
-                seen.add(url)
-                unique_urls.append(url)
-        
-        urls = unique_urls
-
-        if not urls:
-            logger.error("No URLs found in file")
-            sys.exit(1)
-
-        # Build model contexts
-        contexts = build_model_contexts(urls)
+            # Split on commas - expect exactly 3 parts: code, dataset, model
+            parts = [url.strip() for url in line.split(',') if url.strip()]
+            if len(parts) != 3:
+                logger.warning(f"Skipping malformed line (expected 3 URLs): {line}")
+                continue
+                
+            code_url, dataset_url, model_url = parts
+            
+            # Parse each URL to get the appropriate category
+            from .urls import parse_url
+            from .models import ModelContext
+            
+            code_parsed = parse_url(code_url)
+            dataset_parsed = parse_url(dataset_url)
+            model_parsed = parse_url(model_url)
+            
+            # Create model context directly with the known structure
+            context = ModelContext(
+                model_url=model_parsed,
+                datasets=[dataset_parsed],
+                code_repos=[code_parsed]
+            )
+            contexts.append(context)
 
         if not contexts:
-            logger.error("No model URLs found")
+            logger.error("No valid model contexts found")
             sys.exit(1)
 
         logger.info(f"Processing {len(contexts)} models")
