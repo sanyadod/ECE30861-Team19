@@ -39,7 +39,7 @@ class SizeScore(BaseModel):
 class MetricResult(BaseModel):
     """Result of a single metric calculation."""
 
-    score: float = Field(..., ge=0.0, le=1.0)
+    score: Dict[str, float] | float #float = Field(..., ge=0.0, le=1.0)
     latency: int = Field(..., ge=0)  # milliseconds
 
 
