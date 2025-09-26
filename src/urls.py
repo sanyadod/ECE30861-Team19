@@ -48,11 +48,8 @@ def _parse_huggingface_url(url: str, parsed) -> ParsedURL:
         category = URLCategory.MODEL
         owner = path_parts[0] if len(path_parts) > 0 else None
         repo = path_parts[1] if len(path_parts) > 1 else None
-        # For models, set name as "owner/repo" when both present
-        if owner and repo:
-            name = f"{owner}/{repo}"
-        else:
-            name = repo if repo else (url.split("/")[-1])
+        # For models, use only the repo name
+        name = repo if repo else (url.split("/")[-1])
 
     return ParsedURL(
         url=url,

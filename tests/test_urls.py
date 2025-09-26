@@ -17,7 +17,7 @@ def test_parse_huggingface_model_url():
     assert parsed.platform == "huggingface"
     assert parsed.owner == "google"
     assert parsed.repo == "gemma-3-270m"
-    assert parsed.name == "google/gemma-3-270m"
+    assert parsed.name == "gemma-3-270m"
 
 
 def test_parse_huggingface_dataset_url():
@@ -73,7 +73,7 @@ def test_build_model_contexts():
 
     assert len(contexts) == 1
     context = contexts[0]
-    assert context.model_url.name == "test/model"
+    assert context.model_url.name == "model"
     assert len(context.datasets) >= 0  # May or may not find relevant datasets
     assert len(context.code_repos) >= 0  # May or may not find relevant code
 
@@ -83,7 +83,7 @@ def test_find_relevant_resources():
     model_url = ParsedURL(
         url="https://huggingface.co/test/sentiment-model",
         category=URLCategory.MODEL,
-        name="test/sentiment-model",
+        name="sentiment-model",
         platform="huggingface",
         owner="test",
         repo="sentiment-model",
