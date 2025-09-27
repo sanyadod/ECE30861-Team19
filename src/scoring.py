@@ -69,10 +69,10 @@ class MetricScorer:
             },
             "thresholds": {
                 "size_limits": {
-                    "raspberry_pi": 2.0,
-                    "jetson_nano": 8.0,
-                    "desktop_pc": 32.0,
-                    "aws_server": 128.0,
+                    "raspberry_pi": 1.0,
+                    "jetson_nano": 4.0,
+                    "desktop_pc": 16.0,
+                    "aws_server": 64.0,
                 }
             },
         }
