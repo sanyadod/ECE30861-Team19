@@ -19,7 +19,6 @@ from .metrics.ramp_up import RampUpTimeMetric
 from .metrics.size_score import SizeScoreMetric
 from .models import AuditResult, MetricResult, ModelContext, SizeScore
 from .utils import measure_time
-import time
 
 logger = get_logger()
 
@@ -77,13 +76,12 @@ class MetricScorer:
         await self._enrich_context(context)
 
         # Compute all metrics in parallel
-        # with measure_time() as get_net_latency:
-        run_time = time.time()
-        metric_results = await self._compute_metrics_parallel(context)
+        with measure_time() as get_net_latency:
+            metric_results = await self._compute_metrics_parallel(context)
 
             # Calculate net score
-        net_score = self._calculate_net_score(metric_results)
-        stop_time = time.time()
+            net_score = self._calculate_net_score(metric_results)
+
         # Build audit result
         size_score_result = metric_results.get("size_score")
         size_score_obj = (
@@ -98,7 +96,7 @@ class MetricScorer:
             name=context.model_url.name,
             category="MODEL",
             net_score=net_score,
-            net_score_latency =float((stop_time - run_time) * 1000),
+            net_score_latency=get_net_latency(),
             ramp_up_time=metric_results["ramp_up_time"].score,
             ramp_up_time_latency=metric_results["ramp_up_time"].latency,
             bus_factor=metric_results["bus_factor"].score,
