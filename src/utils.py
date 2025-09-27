@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional
 @contextmanager
 def measure_time():
     """Context manager to measure execution time."""
-    start_time = time.perf_counter()
+    start_time = time.time()
     try:
-        yield lambda: int((time.perf_counter() - start_time) * 1000)
+        yield lambda: (time.time() - start_time) * 1000
     finally:
         pass
 
