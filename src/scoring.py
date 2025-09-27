@@ -19,6 +19,7 @@ from .metrics.ramp_up import RampUpTimeMetric
 from .metrics.size_score import SizeScoreMetric
 from .models import AuditResult, MetricResult, ModelContext, SizeScore
 from .utils import measure_time
+import time
 
 logger = get_logger()
 
