@@ -54,7 +54,9 @@ class SizeScoreMetric(BaseMetric):
         """
         if limit_gb <= 0:
             return 0.0
-            
+        
+        ratio = model_size_gb / limit_gb
+
         if model_size_gb <= limit_gb:
             return 1.0
         elif model_size_gb <= limit_gb * 2:
@@ -118,10 +120,10 @@ class SizeScoreMetric(BaseMetric):
 
         # Generic size indicators
         if any(word in model_name for word in ["large", "xl"]):
-            return 4.0
+            return 2.0
         elif any(word in model_name for word in ["base", "medium"]):
-            return 1.0
+            return 0.8
         elif any(word in model_name for word in ["small", "mini", "tiny"]):
-            return 0.5
+            return 0.3
         else:
-            return 2.0  # Default assumption
+            return 1.0  # Default assumption
