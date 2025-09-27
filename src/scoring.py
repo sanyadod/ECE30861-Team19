@@ -67,7 +67,14 @@ class MetricScorer:
                 "dataset_quality": 0.10,
                 "code_quality": 0.10,
             },
-            "thresholds": {},
+            "thresholds": {
+                "size_limits": {
+                    "raspberry_pi": 2.0,
+                    "jetson_nano": 8.0,
+                    "desktop_pc": 32.0,
+                    "aws_server": 128.0,
+                }
+            },
         }
 
     async def score_model(self, context: ModelContext) -> AuditResult:
@@ -82,15 +89,15 @@ class MetricScorer:
             # Calculate net score
             net_score = self._calculate_net_score(metric_results)
 
-        # Build audit result
+        # Build audit result - handle size score properly
         size_score_result = metric_results.get("size_score")
-        size_score_obj = (
-            size_score_result
-            if isinstance(size_score_result, SizeScore)
-            else SizeScore(
+        if isinstance(size_score_result, SizeScore):
+            size_score_obj = size_score_result
+        else:
+            # Fallback if size score format is unexpected
+            size_score_obj = SizeScore(
                 raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
             )
-        )
 
         return AuditResult(
             name=context.model_url.name,
@@ -108,9 +115,7 @@ class MetricScorer:
             size_score=size_score_obj,
             size_score_latency=metric_results["size_score_latency"],
             dataset_and_code_score=metric_results["dataset_and_code_score"].score,
-            dataset_and_code_score_latency=metric_results[
-                "dataset_and_code_score"
-            ].latency,
+            dataset_and_code_score_latency=metric_results["dataset_and_code_score"].latency,
             dataset_quality=metric_results["dataset_quality"].score,
             dataset_quality_latency=metric_results["dataset_quality"].latency,
             code_quality=metric_results["code_quality"].score,
@@ -119,71 +124,74 @@ class MetricScorer:
 
     async def _enrich_context(self, context: ModelContext):
         """Enrich context with data from APIs."""
-        # Get HF model info
-        context.hf_info = await self.hf_api.get_model_info(context.model_url)
+        try:
+            # Get HF model info
+            context.hf_info = await self.hf_api.get_model_info(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to get model info: {e}")
+            context.hf_info = None
 
-        # Get README content
-        context.readme_content = await self.hf_api.get_readme_content(context.model_url)
+        try:
+            # Get README content
+            context.readme_content = await self.hf_api.get_readme_content(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to get README content: {e}")
+            context.readme_content = None
 
-        # Get model config
-        context.config_data = await self.hf_api.get_model_config(context.model_url)
+        try:
+            # Get model config
+            context.config_data = await self.hf_api.get_model_config(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to get model config: {e}")
+            context.config_data = None
 
         logger.info(f"Enriched context for {context.model_url.name}")
 
     async def _compute_metrics_parallel(self, context: ModelContext) -> Dict[str, Any]:
         """Compute all metrics in parallel."""
+        import asyncio
+        
         # Create tasks for all metrics
-        tasks: List[tuple[str, Any]] = []
+        tasks = []
         for metric in self.metrics:
-            if metric.name == "size_score":
-                # Size score returns a SizeScore object, handle specially
-                size_task = self._compute_size_metric_with_latency(metric, context)
-                tasks.append((metric.name, size_task))
-            else:
-                metric_task = metric.compute(context, self.config)
-                tasks.append((metric.name, metric_task))
+            task = metric.compute(context, self.config)
+            tasks.append((metric.name, task))
 
-        # Execute all tasks concurrently
+        # Execute all tasks concurrently using asyncio.gather for true parallelism
         results = {}
+        
+        # Process each metric
         for metric_name, task in tasks:
             try:
                 result = await task
+                
                 if metric_name == "size_score":
-                    # Special handling for size score which returns tuple
-                    if isinstance(result, tuple):
-                        size_scores, latency = result
-                        results[metric_name] = size_scores
-                        results["size_score_latency"] = latency
+                    # Special handling for size score - it returns MetricResult with SizeScore
+                    if hasattr(result, 'score') and isinstance(result.score, SizeScore):
+                        results[metric_name] = result.score
+                        results["size_score_latency"] = result.latency
                     else:
-                        results[metric_name] = result
-                        results["size_score_latency"] = 0
+                        # Fallback if unexpected format
+                        results[metric_name] = SizeScore(
+                            raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
+                        )
+                        results["size_score_latency"] = result.latency if hasattr(result, 'latency') else 0
                 else:
+                    # Normal MetricResult handling
                     results[metric_name] = result
+                    
             except Exception as e:
                 logger.error(f"Error computing {metric_name}: {e}")
                 # Provide default result
                 if metric_name == "size_score":
                     results[metric_name] = SizeScore(
-                        raspberry_pi=0.0,
-                        jetson_nano=0.0,
-                        desktop_pc=0.0,
-                        aws_server=0.0,
+                        raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
                     )
                     results["size_score_latency"] = 0
                 else:
                     results[metric_name] = MetricResult(score=0.0, latency=0)
 
         return results
-
-    async def _compute_size_metric_with_latency(
-        self, metric, context: ModelContext
-    ) -> tuple[SizeScore, int]:
-        """Special handling for size score metric."""
-        with measure_time() as get_latency:
-            size_scores = await metric._calculate_size_scores(context, self.config)
-
-        # Return both size scores and latency
-        return size_scores, get_latency()
 
     def _calculate_net_score(self, metric_results: Dict[str, Any]) -> float:
         """Calculate weighted net score from individual metrics."""
@@ -198,11 +206,9 @@ class MetricScorer:
 
             if metric_name == "size_score" and isinstance(result, SizeScore):
                 weight = weights.get("size_score", 0.0)
+                # Average across all devices
                 avg_size_score = (
-                    result.raspberry_pi
-                    + result.jetson_nano
-                    + result.desktop_pc
-                    + result.aws_server
+                    result.raspberry_pi + result.jetson_nano + result.desktop_pc + result.aws_server
                 ) / 4.0
                 total_score += avg_size_score * weight
                 total_weight += weight
@@ -213,8 +219,7 @@ class MetricScorer:
                 total_score += result.score * weight
                 total_weight += weight
 
-        # If total_weight is zero (e.g., config missing), return average of
-        # present scores
+        # If total_weight is zero, return average of present scores
         if total_weight == 0.0:
             present_scores: List[float] = []
             for metric_name, result in metric_results.items():
@@ -222,18 +227,15 @@ class MetricScorer:
                     continue
                 if isinstance(result, MetricResult):
                     present_scores.append(result.score)
+            
             # Include size_score as average across devices if present
             size_score = metric_results.get("size_score")
             if isinstance(size_score, SizeScore):
                 present_scores.append(
-                    (
-                        size_score.raspberry_pi
-                        + size_score.jetson_nano
-                        + size_score.desktop_pc
-                        + size_score.aws_server
-                    )
-                    / 4.0
+                    (size_score.raspberry_pi + size_score.jetson_nano + 
+                     size_score.desktop_pc + size_score.aws_server) / 4.0
                 )
+            
             net_score = sum(present_scores) / max(len(present_scores), 1)
         else:
             net_score = total_score / total_weight
