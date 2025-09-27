@@ -17,11 +17,12 @@ def parse_url(url: str) -> ParsedURL:
         return _parse_huggingface_url(url, parsed)
     elif "github.com" in parsed.netloc:
         return _parse_github_url(url, parsed)
+        
     else:
         # Unknown platform, make best guess
         return ParsedURL(
             url=url,
-            category=URLCategory.MODEL,  # Default assumption
+            category=URLCategory.DATASET,  # Default assumption
             name=url.split("/")[-1] or url,
             platform="unknown",
         )
