@@ -167,7 +167,7 @@ class MetricScorer:
                 
                 if metric_name == "size_score":
                     # Special handling for size score - it returns MetricResult with SizeScore
-                    if hasattr(result, 'score') and isinstance(result.score, SizeScore):
+                    if isinstance(result.score, SizeScore):
                         results[metric_name] = result.score
                         results["size_score_latency"] = result.latency
                     else:
