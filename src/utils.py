@@ -1,6 +1,6 @@
 """
-Utility functions
--helper bits we reuse across metrics/parsers, keeping it small and dependency free
+Utility functions that are helper bits we reuse across metrics/parsers, 
+keeping it small and dependency free
 """
 
 import re
@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 @contextmanager
 def measure_time():
-    """Context manager to measure execution time."""
+    #time wrapper 
     start_time = time.perf_counter()
     try:
         #return a lambda so callers can ask for the elapsed at the end
@@ -23,17 +23,13 @@ def measure_time():
 
 
 def extract_model_size_from_text(text: str) -> Optional[float]:
-    """
-    Trying to pull a model "size" out of free text, accepting different shapes
-
-    Returns size in GB, or None if not found properly
-    """
+    #pulling a model size out of free text
     if not text:
         return None
 
     # Patterns to match size indicators
     size_patterns = [
-        r"(\d+(?:\.\d+)?)\s*([MGT]?B)\b",  # e.g., "7B", "13.5GB", "270M"
+        r"(\d+(?:\.\d+)?)\s*([MGT]?B)\b",  # e.g., "7B", "13.5GB", "270M", accepting a bunch of shapes
         r"(\d+(?:\.\d+)?)\s*billion",  # e.g., "7 billion parameters"
         r"(\d+(?:\.\d+)?)\s*million",  # e.g., "270 million parameters"
         r"(\d+(?:\.\d+)?)\s*([MGT])\b",  # e.g., "270M", "13B" without B suffix
@@ -84,7 +80,7 @@ def extract_model_size_from_text(text: str) -> Optional[float]:
 
 
 def parse_license_from_readme(readme_content: str) -> Optional[str]:
-    """Extract license information from README content."""
+    #returning a short string, after grabbing a license out of the README
     if not readme_content:
         return None
 
@@ -103,7 +99,7 @@ def parse_license_from_readme(readme_content: str) -> Optional[str]:
             license_text = re.sub(
                 r"\[([^\]]+)\]\([^\)]+\)", r"\1", license_text
             )  # Remove markdown links
-            return license_text[:200]  # Limit length
+            return license_text[:200]  # Limit length, and not returning a novel
 
     return None
 
@@ -111,16 +107,7 @@ def parse_license_from_readme(readme_content: str) -> Optional[str]:
 def check_readme_sections(
     readme_content: str, required_sections: List[str]
 ) -> Dict[str, bool]:
-    """
-    Check for presence of required sections in README content.
-
-    Args:
-        readme_content: The README text content
-        required_sections: List of section names to look for
-
-    Returns:
-        Dict mapping section names to boolean presence
-    """
+  #check for a list of readme sections based on common patterns
     if not readme_content:
         return {section: False for section in required_sections}
 
@@ -131,8 +118,8 @@ def check_readme_sections(
         section_lower = section.lower()
         # Look for section headers
         patterns = [
-            rf"##?\s*{re.escape(section_lower)}\s*\n",  # Markdown header
-            rf"\*\*{re.escape(section_lower)}\*\*",  # Bold text
+            rf"##?\s*{re.escape(section_lower)}\s*\n",  #checking headers
+            rf"\*\*{re.escape(section_lower)}\*\*",  # checking bold labels
             rf"{re.escape(section_lower)}:",  # Colon format
         ]
 
@@ -145,12 +132,8 @@ def check_readme_sections(
 def extract_performance_claims(
     readme_content: str, benchmark_keywords: List[str]
 ) -> Dict[str, Any]:
-    """
-    Extract performance claims and benchmark information from README.
-
-    Returns:
-        Dict with 'benchmarks_mentioned', 'numeric_results', 'citations'
-    """
+#pulling out performance-related hints from the readme
+    
     if not readme_content:
         return {
             "benchmarks_mentioned": [],
@@ -160,29 +143,29 @@ def extract_performance_claims(
 
     readme_lower = readme_content.lower()
 
-    # Check for benchmark mentions
+    # Check for benchmark that are mentioned
     benchmarks_found = []
     for benchmark in benchmark_keywords:
         if benchmark.lower() in readme_lower:
             benchmarks_found.append(benchmark)
 
-    # Check for numeric results (patterns like "82.3%", "0.85", "82.3 accuracy")
+    #any numeric-looking result patterns
     numeric_patterns = [
         r"\d+\.\d+%",  # Percentage
-        r"\d+%",  # Percentage
-        r"accuracy:\s*\d+",  # Accuracy score
-        r"f1:\s*\d+\.\d+",  # F1 score
-        r"score:\s*\d+\.\d+",  # Generic score
+        r"\d+%",  
+        r"accuracy:\s*\d+",  #scores
+        r"f1:\s*\d+\.\d+", 
+        r"score:\s*\d+\.\d+",  
     ]
 
     has_numeric = any(re.search(pattern, readme_lower) for pattern in numeric_patterns)
 
-    # Check for citations or links (markdown links, DOIs, arxiv)
+    # Check for citations or link
     citation_patterns = [
-        r"\[([^\]]+)\]\([^\)]+\)",  # Markdown links
-        r"doi:\s*10\.\d+",  # DOI
-        r"arxiv:\d+\.\d+",  # ArXiv
-        r"https?://[^\s]+",  # General URLs
+        r"\[([^\]]+)\]\([^\)]+\)",  
+        r"doi:\s*10\.\d+",  
+        r"arxiv:\d+\.\d+",  
+        r"https?://[^\s]+",  
     ]
 
     has_citations = any(
