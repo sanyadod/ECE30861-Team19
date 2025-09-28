@@ -1,5 +1,6 @@
 """
 Utility functions
+-helper bits we reuse across metrics/parsers, keeping it small and dependency free
 """
 
 import re
@@ -13,17 +14,19 @@ def measure_time():
     """Context manager to measure execution time."""
     start_time = time.perf_counter()
     try:
+        #return a lambda so callers can ask for the elapsed at the end
         yield lambda: int((time.perf_counter() - start_time) * 10000)
 
     finally:
+        #nothing to clean up
         pass
 
 
 def extract_model_size_from_text(text: str) -> Optional[float]:
     """
-    Extract model size in GB from text using various patterns.
+    Trying to pull a model "size" out of free text, accepting different shapes
 
-    Returns size in GB, or None if not found.
+    Returns size in GB, or None if not found properly
     """
     if not text:
         return None
@@ -39,12 +42,14 @@ def extract_model_size_from_text(text: str) -> Optional[float]:
     text_lower = text.lower()
 
     for pattern in size_patterns:
+        #we pass IGNORECASE, but we already lowercased, so redundancy does not matter
         matches = re.finditer(pattern, text_lower, re.IGNORECASE)
         for match in matches:
             try:
                 size_str = match.group(1)
                 size_value = float(size_str)
 
+#figuring out the unit in billion, millions and bytes
                 if len(match.groups()) > 1 and match.group(2):
                     unit = match.group(2).upper()
                 else:
@@ -72,6 +77,7 @@ def extract_model_size_from_text(text: str) -> Optional[float]:
                     return size_value * 1024.0
 
             except (ValueError, IndexError):
+                #if the match is messy, skipping to the next one
                 continue
 
     return None
