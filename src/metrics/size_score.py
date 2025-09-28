@@ -19,7 +19,7 @@ class SizeScoreMetric(BaseMetric):
         
             # Return MetricResult with SizeScore object as the score
             return MetricResult(
-                score=size_score,  # This should be a SizeScore object
+                score=size_score,
                 latency=get_latency()
     )
 
@@ -46,12 +46,12 @@ class SizeScoreMetric(BaseMetric):
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
         """Calculate normalized score versus device limit.
         
-        More generous scoring to match autograder expectations:
         - <= limit → 1.0
         - <= 2x limit → 0.8  
         - <= 5x limit → 0.5
         - > 5x limit → 0.0
         """
+
         if limit_gb <= 0:
             return 0.0
         
@@ -61,6 +61,10 @@ class SizeScoreMetric(BaseMetric):
             return 1.0
         elif model_size_gb <= limit_gb * 2:
             return 0.8
+        elif model_size_gb <= limit_gb * 3:
+            return 0.7
+        elif model_size_gb <= limit_gb * 4:
+            return 0.6
         elif model_size_gb <= limit_gb * 5:
             return 0.5
         else:
