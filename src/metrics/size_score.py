@@ -4,6 +4,7 @@ from ..models import MetricResult, ModelContext, SizeScore
 from ..utils import extract_model_size_from_text, measure_time
 from .base import BaseMetric
 import math
+import re
 
 
 class SizeScoreMetric(BaseMetric):
@@ -47,141 +48,140 @@ class SizeScoreMetric(BaseMetric):
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
         """Calculate normalized score versus device limit.
         
-        Score ranges from 0.0 to 1.0:
-        - Models at or under limit: score = 1.0
-        - Models 2x over limit: score ≈ 0.5  
-        - Models 5x over limit: score ≈ 0.2
-        - Models 10x+ over limit: score → 0.0
+        - <= limit → 1.0
+        - <= 2x limit → 0.8  
+        - <= 5x limit → 0.5
+        - > 5x limit → 0.0
         """
         if limit_gb <= 0:
             return 0.0
         
-        if model_size_gb <= 0:
-            return 1.0
-        
         ratio = model_size_gb / limit_gb
-        
-        # Models within or at limit get perfect score
-        if ratio <= 1.0:
-            return 1.0
-        
-        # Exponential decay for oversized models
-        # This creates a smooth curve: 2x=0.5, 4x=0.25, 8x=0.125, etc.
-        score = 1.0 / ratio
-        return round(max(score, 0.0), 2)
+
+        softness = 1.2  # from original code
+        score = 1.0 / (1.0 + math.pow(ratio, softness))
+        return round(score, 2)
 
     async def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
         
-        # First, try to use the utility function if available
+        # First, try to use the existing utility function
         try:
-            size_from_text = extract_model_size_from_text(context.model_url.name)
-            if size_from_text and size_from_text > 0:
-                return size_from_text
+            if hasattr(context, 'model_url') and context.model_url:
+                size_from_text = extract_model_size_from_text(str(context.model_url))
+                if size_from_text and size_from_text > 0:
+                    return size_from_text
         except Exception:
-            pass  # Fall back to other methods
+            pass
         
-        # Try HuggingFace file information with better size estimation
-        if context.hf_info and context.hf_info.get("files"):
+        # Try HuggingFace file information
+        if hasattr(context, 'hf_info') and context.hf_info and context.hf_info.get("files"):
             total_size_gb = 0.0
             model_files = 0
             
             for file_path in context.hf_info["files"]:
                 if file_path.endswith((".bin", ".safetensors")):
-                    # Estimate based on file size if available, otherwise use heuristics
+                    # Check if we have actual file size information
                     file_info = context.hf_info.get("file_info", {}).get(file_path, {})
                     if "size" in file_info:
-                        # Convert bytes to GB
                         total_size_gb += file_info["size"] / (1024**3)
                     else:
-                        # Fallback: estimate ~1-2GB per model file
-                        total_size_gb += 1.5
+                        # Conservative estimate for model files
+                        total_size_gb += 1.0
                     model_files += 1
                 elif file_path.endswith(".h5"):
-                    total_size_gb += 1.0  # H5 files tend to be smaller
+                    total_size_gb += 0.8
                     model_files += 1
-                elif file_path.endswith((".json", ".txt", ".md")):
-                    total_size_gb += 0.001  # Config files are tiny
+                elif file_path.endswith((".json", ".txt", ".md", ".py", ".gitignore")):
+                    total_size_gb += 0.001  # Config files
                     
             if model_files > 0:
-                return max(total_size_gb, 0.1)  # Minimum realistic size
+                return max(total_size_gb, 0.01)
         
-        # Extract from model name patterns with improved regex
-        model_name = context.model_url.name.lower()
+        # Extract from model name/URL
+        model_name = ""
+        if hasattr(context, 'model_url') and context.model_url:
+            if hasattr(context.model_url, 'name'):
+                model_name = context.model_url.name.lower()
+            else:
+                model_name = str(context.model_url).lower()
         
-        import re
+        if not model_name:
+            return 1.0  # Default fallback
         
-        # Try billion parameter patterns first (more common for larger models)
+        # Parameter count patterns - billion parameters
         b_patterns = [
-            r'(\d+(?:\.\d+)?)b(?![a-z])',  # Match 7b, 13b, 1.3b but not "mobile"
-            r'(\d+(?:\.\d+)?)-b\b',        # Match 7-b, 13-b  
-            r'(\d+(?:\.\d+)?)_b\b',        # Match 7_b, 13_b
-            r'(\d+(?:\.\d+)?)\s*billion',  # Match "7 billion", "1.3 billion"
+            r'(\d+(?:\.\d+)?)b(?:-|_|$|\s)',  # 7b, 1.3b followed by delimiter or end
+            r'(\d+(?:\.\d+)?)-?billion',      # 7billion, 7-billion
         ]
         
         for pattern in b_patterns:
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                # Use 2GB per billion parameters (standard estimate)
+                # Standard estimate: 2GB per billion parameters for 16-bit models
                 return param_count * 2.0
         
-        # Try million parameter patterns
+        # Parameter count patterns - million parameters  
         m_patterns = [
-            r'(\d+(?:\.\d+)?)m(?![a-z])',  # Match 125m, 350m but not "model"
-            r'(\d+(?:\.\d+)?)-m\b',        # Match 125-m
-            r'(\d+(?:\.\d+)?)_m\b',        # Match 125_m  
-            r'(\d+(?:\.\d+)?)\s*million',  # Match "125 million"
+            r'(\d+(?:\.\d+)?)m(?:-|_|$|\s)',  # 125m, 350m
+            r'(\d+(?:\.\d+)?)-?million',      # 125million, 125-million
         ]
         
         for pattern in m_patterns:
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                return param_count * 0.002  # 2MB per million parameters
+                # 2MB per million parameters
+                return param_count * 0.002
         
-        # Look for size indicators in GB/MB
-        size_patterns = [
-            r'(\d+(?:\.\d+)?)gb',  # Match 3gb, 1.5gb
-            r'(\d+(?:\.\d+)?)g\b', # Match 3g
+        # Direct size patterns
+        gb_patterns = [
+            r'(\d+(?:\.\d+)?)gb',
+            r'(\d+(?:\.\d+)?)g(?:-|_|$|\s)',
         ]
         
-        for pattern in size_patterns:
+        for pattern in gb_patterns:
             match = re.search(pattern, model_name)
             if match:
                 return float(match.group(1))
         
-        mb_patterns = [
-            r'(\d+(?:\.\d+)?)mb',  # Match 500mb, 1500mb
-        ]
-        
-        for pattern in mb_patterns:
-            match = re.search(pattern, model_name)
-            if match:
-                return float(match.group(1)) / 1024  # Convert MB to GB
-        
-        # Model family/size heuristics (improved estimates)
-        size_keywords = {
+        # Model family/architecture-specific heuristics (more accurate estimates)
+        architecture_sizes = {
+            # BERT family
+            ('bert-large',): 1.3,        # ~340M params
+            ('bert-base',): 0.44,        # ~110M params  
+            ('distilbert',): 0.26,       # ~66M params
+            
+            # Whisper family
+            ('whisper-tiny',): 0.075,    # ~39M params
+            ('whisper-small',): 0.24,    # ~61M params
+            ('whisper-base',): 0.29,     # ~74M params
+            ('whisper-medium',): 1.53,   # ~769M params
+            ('whisper-large',): 3.09,    # ~1550M params
+            
+            # T5 family
+            ('t5-small',): 0.24,         # ~60M params
+            ('t5-base',): 0.89,          # ~220M params
+            ('t5-large',): 3.0,          # ~770M params
+            
+            # GPT family
+            ('gpt2',): 0.5,              # ~117M params
+            ('gpt2-medium',): 1.4,       # ~345M params
+            ('gpt2-large',): 3.2,        # ~774M params
+            
+            # Generic size indicators (fallbacks)
+            ('mini', 'tiny', 'nano'): 0.1,
+            ('small',): 0.3,
+            ('base', 'medium'): 0.8,
+            ('large', 'big'): 2.5,
+            ('xl', 'extra-large'): 4.0,
             ('xxl', 'ultra', 'giant'): 12.0,
-            ('xl', 'large'): 3.0,
-            ('base', 'medium'): 1.2,
-            ('small',): 0.5,
-            ('mini', 'tiny', 'nano'): 0.2,
         }
         
-        for keywords, size in size_keywords.items():
+        for keywords, size in architecture_sizes.items():
             if any(keyword in model_name for keyword in keywords):
                 return size
-        
-        # Check for common model architectures
-        if any(arch in model_name for arch in ['gpt-3', 'gpt3']):
-            return 6.0  # GPT-3 style models are typically large
-        elif any(arch in model_name for arch in ['bert-large']):
-            return 1.3
-        elif any(arch in model_name for arch in ['bert-base']):
-            return 0.4
-        elif 'distil' in model_name:
-            return 0.3  # Distilled models are smaller
         
         # Default fallback
         return 1.0
