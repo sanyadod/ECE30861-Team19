@@ -1,5 +1,5 @@
 """
-Data models
+Data models  used across parsing and scoring
 """
 
 from enum import Enum
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 class URLCategory(str, Enum):
-    """Categories for URLs."""
+    #coarse buckets, add more if we treat HF scpaes, etc differently
 
     MODEL = "MODEL"
     DATASET = "DATASET"
@@ -17,7 +17,7 @@ class URLCategory(str, Enum):
 
 
 class ParsedURL(BaseModel):
-    """Represents a parsed URL with metadata."""
+ #minimal information needed to reason about a URL without hitting the network
 
     url: str
     category: URLCategory
@@ -28,7 +28,7 @@ class ParsedURL(BaseModel):
 
 
 class SizeScore(BaseModel):
-    """Size score breakdown by device type."""
+    #per device, the normalized scores in the format of [0,1]
 
     raspberry_pi: float = Field(..., ge=0.0, le=1.0)
     jetson_nano: float = Field(..., ge=0.0, le=1.0)
@@ -37,17 +37,17 @@ class SizeScore(BaseModel):
 
 
 class MetricResult(BaseModel):
-    """Result of a single metric calculation."""
+    #single metric output, most of them return a scalar in [0,1]
 
     score: float = Field(..., ge=0.0, le=1.0)
-    latency: int = Field(..., ge=0)  # milliseconds
+    latency: int = Field(..., ge=0)  # milliseconds unit
 
 
 class AuditResult(BaseModel):
-    """Complete audit result for a model (NDJSON output format)."""
+    #it is flattened view for NDJSON, keeping the normalized numbers 
 
     name: str
-    category: str = "MODEL"  # Always MODEL for output
+    category: str = "MODEL"  # Always MODEL for output is expected 
     net_score: float = Field(..., ge=0.0, le=1.0)
     net_score_latency: int = Field(..., ge=0)
 
@@ -77,7 +77,7 @@ class AuditResult(BaseModel):
 
 
 class ModelContext(BaseModel):
-    """Context for a model including associated datasets and code."""
+    #all we know about the model + related assets, no netwrok required here 
 
     model_url: ParsedURL
     datasets: list[ParsedURL] = Field(default_factory=list)
