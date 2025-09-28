@@ -47,24 +47,28 @@ class SizeScoreMetric(BaseMetric):
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
         """Calculate normalized score versus device limit.
         
-        Returns a score from 0.0 to 1.0 based on how well the model fits the device:
-        - Models within limit get high scores (close to 1.0)
-        - Models significantly over limit get low scores (close to 0.0)
+        Score ranges from 0.0 to 1.0:
+        - Models at or under limit: score = 1.0
+        - Models 2x over limit: score ≈ 0.5  
+        - Models 5x over limit: score ≈ 0.2
+        - Models 10x+ over limit: score → 0.0
         """
         if limit_gb <= 0:
             return 0.0
         
+        if model_size_gb <= 0:
+            return 1.0
+        
         ratio = model_size_gb / limit_gb
         
-        # Use a smoother decay function
+        # Models within or at limit get perfect score
         if ratio <= 1.0:
-            # Models within limit get scores between 0.8-1.0
-            return round(1.0 - 0.2 * ratio, 2)
-        else:
-            # Models over limit decay more rapidly
-            # At 2x limit: ~0.3, at 5x limit: ~0.04
-            score = 1.0 / (1.0 + math.pow(ratio - 1.0, 2))
-            return round(score, 2)
+            return 1.0
+        
+        # Exponential decay for oversized models
+        # This creates a smooth curve: 2x=0.5, 4x=0.25, 8x=0.125, etc.
+        score = 1.0 / ratio
+        return round(max(score, 0.0), 2)
 
     async def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
@@ -109,24 +113,24 @@ class SizeScoreMetric(BaseMetric):
         
         # Try billion parameter patterns first (more common for larger models)
         b_patterns = [
-            r'(\d+(?:\.\d+)?)b(?![\w])',  # Match 7b, 13b, 1.3b but not "mobile"
-            r'(\d+(?:\.\d+)?)-b\b',       # Match 7-b, 13-b
-            r'(\d+(?:\.\d+)?)_b\b',       # Match 7_b, 13_b
-            r'(\d+(?:\.\d+)?)\s*billion', # Match "7 billion", "1.3 billion"
+            r'(\d+(?:\.\d+)?)b(?![a-z])',  # Match 7b, 13b, 1.3b but not "mobile"
+            r'(\d+(?:\.\d+)?)-b\b',        # Match 7-b, 13-b  
+            r'(\d+(?:\.\d+)?)_b\b',        # Match 7_b, 13_b
+            r'(\d+(?:\.\d+)?)\s*billion',  # Match "7 billion", "1.3 billion"
         ]
         
         for pattern in b_patterns:
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                # More accurate size estimation: ~2-4GB per billion parameters depending on precision
-                return param_count * 2.5
+                # Use 2GB per billion parameters (standard estimate)
+                return param_count * 2.0
         
         # Try million parameter patterns
         m_patterns = [
-            r'(\d+(?:\.\d+)?)m(?![\w])',   # Match 125m, 350m but not "model"
+            r'(\d+(?:\.\d+)?)m(?![a-z])',  # Match 125m, 350m but not "model"
             r'(\d+(?:\.\d+)?)-m\b',        # Match 125-m
-            r'(\d+(?:\.\d+)?)_m\b',        # Match 125_m
+            r'(\d+(?:\.\d+)?)_m\b',        # Match 125_m  
             r'(\d+(?:\.\d+)?)\s*million',  # Match "125 million"
         ]
         
@@ -134,7 +138,7 @@ class SizeScoreMetric(BaseMetric):
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                return param_count * 0.004  # ~4MB per million parameters (more realistic)
+                return param_count * 0.002  # 2MB per million parameters
         
         # Look for size indicators in GB/MB
         size_patterns = [
