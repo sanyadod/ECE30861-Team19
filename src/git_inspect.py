@@ -93,6 +93,8 @@ class GitInspector:
                 shutil.rmtree(clone_path, ignore_errors=True)
             return None
 
+
+
     def analyze_repository(self, repo_path: str) -> Dict[str, Any]:
         """
         Analyze a cloned repository for various quality metrics.
@@ -118,7 +120,7 @@ class GitInspector:
     def _analyze_commits(self, repo: Repo) -> Dict[str, Any]:
         """Analyze commit history."""
         try:
-            commits = list(repo.get_walker(max_entries=100))  # Limit for performance
+            commits = list(repo.get_walker(max_entries=100))  # Limiting to 100 for performance as we want the recent signal
 
             if not commits:
                 return {
@@ -162,6 +164,7 @@ class GitInspector:
             }
 
         except Exception as e:
+            #keeping the rest of the analysis alive even if this part fails
             logger.warning(f"Error analyzing commits: {e}")
             return {"total_commits": 0, "recent_commits": 0, "avg_commit_frequency": 0}
 
@@ -175,6 +178,7 @@ class GitInspector:
 
             for entry in commits:
                 commit = entry.commit
+                #author/commiteer are bytes
                 authors.add(commit.author.decode("utf-8", errors="ignore"))
                 committers.add(commit.committer.decode("utf-8", errors="ignore"))
 
@@ -195,7 +199,7 @@ class GitInspector:
                 "unique_authors": unique_authors,
                 "unique_committers": len(committers),
                 "bus_factor_score": bus_factor_score,
-                "authors": list(authors)[:10],  # Limit for privacy
+                "authors": list(authors)[:10],  # Limit for privacy/log size
             }
 
         except Exception as e:
@@ -211,6 +215,8 @@ class GitInspector:
         try:
             repo_root = Path(repo_path)
 
+            #consider any 8.py as code, tests are identified by name or parent folder
+
             python_files = list(repo_root.glob("**/*.py"))
             test_files = [
                 f
@@ -219,13 +225,14 @@ class GitInspector:
                 or f.parent.name.lower() in ["test", "tests"]
             ]
 
-            # Count lines of code (simple version)
+            # Count lines of code (simple version), not fully precise
             total_lines = 0
             for py_file in python_files:
                 try:
                     with open(py_file, "r", encoding="utf-8", errors="ignore") as f:
                         total_lines += len(f.readlines())
                 except Exception:
+                    #ignore unreadable files 
                     continue
 
             return {
@@ -267,6 +274,7 @@ class GitInspector:
                 repo_root / ".gitlab-ci.yml"
             ).exists()
 
+#simple equal-weight score, eadsy to extend with weights if needed
             structure_score = (
                 sum([has_readme, has_license, has_requirements, has_setup, has_ci])
                 / 5.0
@@ -290,7 +298,7 @@ class GitInspector:
         try:
             repo_root = Path(repo_path)
 
-            # Find README content
+            # Finds the first README.* we can open, ignoring the encoding errors
             readme_content = ""
             for readme_file in repo_root.glob("README.*"):
                 try:
@@ -300,7 +308,7 @@ class GitInspector:
                 except Exception:
                     continue
 
-            # Basic documentation analysis
+            # Basic documentation analysis, just signals
             has_usage = "usage" in readme_content.lower()
             has_installation = "install" in readme_content.lower()
             has_examples = "example" in readme_content.lower()
@@ -316,7 +324,7 @@ class GitInspector:
                 "has_installation_section": has_installation,
                 "has_examples": has_examples,
                 "documentation_score": doc_score,
-                "readme_content": readme_content[:2000],  # Limit size
+                "readme_content": readme_content[:2000],  # Limit size to keep small
             }
 
         except Exception as e:
@@ -325,6 +333,7 @@ class GitInspector:
 
     def _empty_analysis(self) -> Dict[str, Any]:
         """Return empty analysis structure."""
+        #consistent shape so callers dont need to try on the missing keys
         return {
             "commit_analysis": {
                 "total_commits": 0,
@@ -341,7 +350,7 @@ class GitInspector:
         }
 
     def cleanup(self):
-        """Clean up cache directory."""
+        #dont raise during cleanup, just logging
         try:
             if os.path.exists(self.cache_dir):
                 shutil.rmtree(self.cache_dir)
