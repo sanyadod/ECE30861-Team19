@@ -3,6 +3,7 @@ from typing import Any, Dict
 from ..models import MetricResult, ModelContext, SizeScore
 from ..utils import extract_model_size_from_text, measure_time
 from .base import BaseMetric
+import math
 
 
 class SizeScoreMetric(BaseMetric):
@@ -57,18 +58,9 @@ class SizeScoreMetric(BaseMetric):
         
         ratio = model_size_gb / limit_gb
 
-        if model_size_gb <= limit_gb:
-            return 1.0
-        elif model_size_gb <= limit_gb * 2:
-            return 0.8
-        elif model_size_gb <= limit_gb * 3:
-            return 0.7
-        elif model_size_gb <= limit_gb * 4:
-            return 0.6
-        elif model_size_gb <= limit_gb * 5:
-            return 0.5
-        else:
-            return 0.0
+        softness = 1.2  # tweak
+        score = 1.0 / (1.0 + math.pow(ratio, softness))
+        return round(score, 2) 
 
     async def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
