@@ -24,11 +24,12 @@ logger = get_logger()
 
 
 class MetricScorer:
-    """Handles parallel metric computation and scoring."""
+    #handing parallel metric computation and scoring that is needed
 
-    def __init__(self, config_path: str = "config/weights.yaml"):
-        self.config = self._load_config(config_path)
+    def __init__(self, config_path: str = "config/weights.yaml"): 
+        self.config = self._load_config(config_path) #loads weights+ thresholds
         self.metrics = [
+            #grouping order here
             RampUpTimeMetric(),
             BusFactorMetric(),
             PerformanceClaimsMetric(),
@@ -38,7 +39,7 @@ class MetricScorer:
             DatasetQualityMetric(),
             CodeQualityMetric(),
         ]
-        self.hf_api = HuggingFaceAPI()
+        self.hf_api = HuggingFaceAPI() #hf client for enhancing
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """Load configuration from YAML file."""
@@ -46,16 +47,16 @@ class MetricScorer:
             config_file = Path(config_path)
             if not config_file.exists():
                 logger.warning(f"Config file {config_path} not found, using defaults")
-                return self._get_default_config()
+                return self._get_default_config() #fallsback if file might be missing
 
             with open(config_file, "r") as f:
-                return yaml.safe_load(f)
+                return yaml.safe_load(f) #simple yaml -> dict
         except Exception as e:
             logger.error(f"Error loading config: {e}")
-            return self._get_default_config()
+            return self._get_default_config() #fallback on parse errors
 
     def _get_default_config(self) -> Dict[str, Any]:
-        """Return default configuration."""
+        #quick defaults so pipeline still runs without a config file
         return {
             "metric_weights": {
                 "ramp_up_time": 0.15,
@@ -78,27 +79,28 @@ class MetricScorer:
         }
 
     async def score_model(self, context: ModelContext) -> AuditResult:
-        """Score a model using all metrics in parallel."""
+    
         # Enrich context with API data
-        await self._enrich_context(context)
+        await self._enrich_context(context) #fill context with hf bits
 
-        # Compute all metrics in parallel
+        # computing all metrics
         with measure_time() as get_net_latency:
             metric_results = await self._compute_metrics_parallel(context)
 
             # Calculate net score
-            net_score = self._calculate_net_score(metric_results)
+            net_score = self._calculate_net_score(metric_results) #weighted blend
 
         # Build audit result - handle size score properly
         size_score_result = metric_results.get("size_score")
         if isinstance(size_score_result, SizeScore):
             size_score_obj = size_score_result
         else:
-            # Fallback if size score format is unexpected
+            # fallback if size score format is unexpected
             size_score_obj = SizeScore(
                 raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
             )
 
+        #assemble flat audit record 
         return AuditResult(
             name=context.model_url.name,
             category="MODEL",
@@ -123,10 +125,11 @@ class MetricScorer:
         )
 
     async def _enrich_context(self, context: ModelContext):
-        """Enrich context with data from APIs."""
+        #enrich context with API datas
+
         try:
             # Get HF model info
-            context.hf_info = await self.hf_api.get_model_info(context.model_url)
+            context.hf_info = await self.hf_api.get_model_info(context.model_url) 
         except Exception as e:
             logger.error(f"Failed to get model info: {e}")
             context.hf_info = None
