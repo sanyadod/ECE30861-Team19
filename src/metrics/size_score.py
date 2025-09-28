@@ -58,7 +58,6 @@ class SizeScoreMetric(BaseMetric):
         
         ratio = model_size_gb / limit_gb
 
-        # Use EXACTLY the original formula from your code
         softness = 1.2  # tweak
         score = 1.0 / (1.0 + math.pow(ratio, softness))
         return round(score, 2)

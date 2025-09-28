@@ -1,7 +1,3 @@
-"""
-Dataset and code score metric - evaluates linked training data and example code.
-"""
-
 from typing import Any, Dict
 
 from ..models import MetricResult, ModelContext
@@ -36,7 +32,7 @@ class DatasetAndCodeScoreMetric(BaseMetric):
         has_dataset_link = False
         has_example_code = False
 
-        # Check for dataset link (README or model_index.json)
+        # check for dataset link
         if context.datasets:
             has_dataset_link = True
         elif context.readme_content:
@@ -54,7 +50,7 @@ class DatasetAndCodeScoreMetric(BaseMetric):
                 indicator in readme_lower for indicator in dataset_indicators
             )
 
-        # Check for model_index.json dataset references
+        # check for model_index.json dataset references
         if (
             not has_dataset_link
             and context.hf_info
@@ -62,7 +58,7 @@ class DatasetAndCodeScoreMetric(BaseMetric):
         ):
             has_dataset_link = True
 
-        # Check for example train/test code (links or scripts)
+        # check for example train/test code
         if context.code_repos:
             has_example_code = True
         elif context.readme_content:
@@ -86,7 +82,7 @@ class DatasetAndCodeScoreMetric(BaseMetric):
                 indicator in readme_lower for indicator in code_indicators
             )
 
-        # Check files for training/example scripts
+        # check files for training/example scripts
         if not has_example_code and context.hf_info and context.hf_info.get("files"):
             files = context.hf_info["files"]
             script_files = any(
@@ -98,10 +94,10 @@ class DatasetAndCodeScoreMetric(BaseMetric):
             )
             has_example_code = script_files
 
-        # Apply specification scoring rules
+        # specification scoring rules
         if has_dataset_link and has_example_code:
-            return 1.0  # Both present → 1.0
+            return 1.0  # both present
         elif has_dataset_link or has_example_code:
-            return 0.5  # Only one → 0.5
+            return 0.5  # one present
         else:
-            return 0.1  # Neither → base score 0.1
+            return 0.1  # neither present

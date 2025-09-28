@@ -27,16 +27,15 @@ def _looks_like_github_pat(token: str) -> bool:
 
 def _validate_environment() -> None:
     """Validate critical environment variables at startup."""
-    # 1) Validate GitHub token
+    # 1 - validate GitHub token
     gh_token = os.getenv("GITHUB_TOKEN")
     if gh_token is not None:
         if not gh_token.strip() or not _looks_like_github_pat(gh_token.strip()):
-            # Use stderr for critical validation errors before logging is set up
-            # This is necessary before logging is initialized
             print("Error: Invalid GITHUB_TOKEN format", file=sys.stderr)
             sys.exit(1)
 
-    # 2) Setup logging; logging_utils will exit(1) for invalid LOG_FILE
+    # 2 - setup logging 
+    # logging_utils will exit(1) for invalid LOG_FILE
     setup_logging()
 
 

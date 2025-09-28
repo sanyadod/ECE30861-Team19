@@ -1,7 +1,3 @@
-"""
-Dataset quality metric - evaluates quality of referenced datasets.
-"""
-
 from typing import Any, Dict, Optional
 
 from ..hf_api import HuggingFaceAPI
@@ -34,12 +30,12 @@ class DatasetQualityMetric(BaseMetric):
         Score = (#fields_filled / 4) for description, size/#samples, license,
         and benchmark references.
         """
-        # If no datasets are linked, check README for dataset information
+        #iIf no datasets are linked, check README for dataset information
         if not context.datasets:
             if context.readme_content:
                 return self._analyze_readme_dataset_quality(context.readme_content)
             else:
-                return 0.3  # Default when no datasets
+                return 0.3  # default when no datasets
 
         total_score = 0.0
         datasets_analyzed = 0
@@ -55,11 +51,11 @@ class DatasetQualityMetric(BaseMetric):
                 datasets_analyzed += 1
 
         if datasets_analyzed == 0:
-            # Non-HF datasets - check README fallback
+            # non HF datasets - check README fallback
             if context.readme_content:
                 return self._analyze_readme_dataset_quality(context.readme_content)
             else:
-                return 0.3  # Default when no datasets
+                return 0.3  # default
 
         return total_score / datasets_analyzed
 
@@ -67,12 +63,12 @@ class DatasetQualityMetric(BaseMetric):
         self, dataset_url, hf_api: HuggingFaceAPI
     ) -> float:
         """Analyze a HF dataset for description, size/#samples, license, benchmarks."""
-        # Get dataset README
+        # get dataset README
         readme_content = await hf_api.get_readme_content(dataset_url)
         if not readme_content:
-            return 0.0  # Nothing found → 0.0
+            return 0.0 
 
-        # Get dataset info from API
+        # get dataset info from API
         dataset_info = await hf_api.get_dataset_info(dataset_url)
 
         return self._analyze_dataset_content(readme_content, dataset_info)
@@ -88,7 +84,7 @@ class DatasetQualityMetric(BaseMetric):
         score = 0.0
         readme_lower = readme_content.lower()
 
-        # 1. Description (1/4 points)
+        # description (25% of points)
         if (
             "description" in readme_lower
             or "overview" in readme_lower
@@ -97,7 +93,7 @@ class DatasetQualityMetric(BaseMetric):
         ):
             score += 0.25
 
-        # 2. Size/#samples (1/4 points)
+        # size/#samples (25% of points)
         size_indicators = [
             "size",
             "samples",
@@ -116,7 +112,7 @@ class DatasetQualityMetric(BaseMetric):
         if any(indicator in readme_lower for indicator in size_indicators):
             score += 0.25
 
-        # 3. License (1/4 points)
+        # license (25% of points)
         license_found = False
         if "license" in readme_lower:
             license_found = True
@@ -126,7 +122,7 @@ class DatasetQualityMetric(BaseMetric):
         if license_found:
             score += 0.25
 
-        # 4. Benchmark references (1/4 points)
+        # benchmark references (25% of points)
         benchmark_indicators = [
             "benchmark",
             "evaluation",

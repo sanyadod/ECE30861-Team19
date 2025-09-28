@@ -31,18 +31,18 @@ class BusFactorMetric(BaseMetric):
         """
         contributors = 0
 
-        # Try to get contributor count from git repository analysis
+        # get contributor count from git repository analysis
         if context.code_repos:
             git_inspector = GitInspector()
             try:
-                # Limit to first 2 repositories to prevent excessive processing
+                # limit to first 2 repositories to prevent excessive processing
                 for code_repo in context.code_repos[:2]:
                     repo_path = git_inspector.clone_repo(code_repo)
                     if repo_path:
                         analysis = git_inspector.analyze_repository(repo_path)
                         contributor_data = analysis.get("contributor_analysis", {})
 
-                        # Get unique authors (prefer last 12 months, otherwise all-time)
+                        # get unique authors (prefer last 12 months, otherwise all-time)
                         recent_authors = contributor_data.get(
                             "recent_unique_authors", 0
                         )
@@ -51,19 +51,19 @@ class BusFactorMetric(BaseMetric):
                         contributors = (
                             recent_authors if recent_authors > 0 else all_time_authors
                         )
-                        break  # Use first available repo
+                        break  # use first available repo
             finally:
                 git_inspector.cleanup()
 
-        # If no code repos or no contributors found, try to estimate from HF metadata
+        # otherwise, try to estimate from HF metadata
         if contributors == 0 and context.hf_info:
-            # Estimate contributors based on HF engagement as fallback
+            # estimate contributors based on HF engagement as fallback
             downloads = context.hf_info.get("downloads", 0)
             likes = context.hf_info.get("likes", 0)
 
-            # Rough estimation: high engagement suggests more contributors
+            # rough estimation: high engagement suggests more contributors
             if downloads > 100000 and likes > 100:
-                contributors = 5  # Assume well-maintained project
+                contributors = 5 # assumption
             elif downloads > 10000 and likes > 50:
                 contributors = 3
             elif downloads > 1000 and likes > 10:
@@ -71,7 +71,7 @@ class BusFactorMetric(BaseMetric):
             else:
                 contributors = 1
 
-        # Apply specification formula: BusFactor = min(1.0, contributors / 5.0)
+        # specification formula: BusFactor = min(1.0, contributors / 5.0)
         return min(1.0, contributors / 5.0)
 
     # analyze hugging face engagement
@@ -104,7 +104,6 @@ class BusFactorMetric(BaseMetric):
 
         # recent activity
         if hf_info.get("last_modified"):
-            # add better date parsing
             engagement_score += 0.1
 
         return min(0.8, engagement_score)  # cap hugging face only score
