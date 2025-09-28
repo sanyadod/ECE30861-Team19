@@ -18,11 +18,11 @@ class SizeScoreMetric(BaseMetric):
         with measure_time() as get_latency:
             size_score = await self._calculate_size_scores(context, config)
         
-            # Return MetricResult with SizeScore object as the score
-            return MetricResult(
-                score=size_score,
-                latency=get_latency()
-    )
+        # Return MetricResult with SizeScore object as the score
+        return MetricResult(
+            score=size_score,
+            latency=get_latency()
+        )
 
     async def _calculate_size_scores(
         self, context: ModelContext, config: Dict[str, Any]
@@ -47,79 +47,137 @@ class SizeScoreMetric(BaseMetric):
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
         """Calculate normalized score versus device limit.
         
-        - <= limit → 1.0
-        - <= 2x limit → 0.8  
-        - <= 5x limit → 0.5
-        - > 5x limit → 0.0
+        Returns a score from 0.0 to 1.0 based on how well the model fits the device:
+        - Models within limit get high scores (close to 1.0)
+        - Models significantly over limit get low scores (close to 0.0)
         """
-
         if limit_gb <= 0:
             return 0.0
         
         ratio = model_size_gb / limit_gb
-
-        softness = 1.2  # tweak
-        score = 1.0 / (1.0 + math.pow(ratio, softness))
-        return round(score, 2) 
+        
+        # Use a smoother decay function
+        if ratio <= 1.0:
+            # Models within limit get scores between 0.8-1.0
+            return round(1.0 - 0.2 * ratio, 2)
+        else:
+            # Models over limit decay more rapidly
+            # At 2x limit: ~0.3, at 5x limit: ~0.04
+            score = 1.0 / (1.0 + math.pow(ratio - 1.0, 2))
+            return round(score, 2)
 
     async def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
-        # Priority 1: Extract from README content
-        if context.readme_content:
-            size_from_readme = extract_model_size_from_text(context.readme_content)
-            if size_from_readme:
-                return size_from_readme
-
-        # Priority 2: Estimate from HuggingFace file information
+        
+        # First, try to use the utility function if available
+        try:
+            size_from_text = extract_model_size_from_text(context.model_url.name)
+            if size_from_text and size_from_text > 0:
+                return size_from_text
+        except Exception:
+            pass  # Fall back to other methods
+        
+        # Try HuggingFace file information with better size estimation
         if context.hf_info and context.hf_info.get("files"):
             total_size_gb = 0.0
+            model_files = 0
+            
             for file_path in context.hf_info["files"]:
-                if file_path.endswith((".bin", ".safetensors", ".h5")):
-                    # Model weights - more realistic estimates
-                    if "pytorch_model" in file_path or "model" in file_path:
-                        total_size_gb += 1.0  # ~1GB per model file
-                elif file_path.endswith(".json"):
+                if file_path.endswith((".bin", ".safetensors")):
+                    # Estimate based on file size if available, otherwise use heuristics
+                    file_info = context.hf_info.get("file_info", {}).get(file_path, {})
+                    if "size" in file_info:
+                        # Convert bytes to GB
+                        total_size_gb += file_info["size"] / (1024**3)
+                    else:
+                        # Fallback: estimate ~1-2GB per model file
+                        total_size_gb += 1.5
+                    model_files += 1
+                elif file_path.endswith(".h5"):
+                    total_size_gb += 1.0  # H5 files tend to be smaller
+                    model_files += 1
+                elif file_path.endswith((".json", ".txt", ".md")):
                     total_size_gb += 0.001  # Config files are tiny
                     
-            if total_size_gb > 0:
-                return total_size_gb
-
-        # Priority 3: Extract from model name patterns
+            if model_files > 0:
+                return max(total_size_gb, 0.1)  # Minimum realistic size
+        
+        # Extract from model name patterns with improved regex
         model_name = context.model_url.name.lower()
         
-        # More comprehensive pattern matching
         import re
         
-        # Parameter patterns (billions)
-        b_patterns = [r'(\d+)b\b', r'(\d+)-b\b', r'(\d+)_b\b']
+        # Try billion parameter patterns first (more common for larger models)
+        b_patterns = [
+            r'(\d+(?:\.\d+)?)b(?![\w])',  # Match 7b, 13b, 1.3b but not "mobile"
+            r'(\d+(?:\.\d+)?)-b\b',       # Match 7-b, 13-b
+            r'(\d+(?:\.\d+)?)_b\b',       # Match 7_b, 13_b
+            r'(\d+(?:\.\d+)?)\s*billion', # Match "7 billion", "1.3 billion"
+        ]
+        
         for pattern in b_patterns:
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                return param_count * 2.0  # ~2GB per billion parameters
+                # More accurate size estimation: ~2-4GB per billion parameters depending on precision
+                return param_count * 2.5
         
-        # Parameter patterns (millions) 
-        m_patterns = [r'(\d+)m\b', r'(\d+)-m\b', r'(\d+)_m\b']
+        # Try million parameter patterns
+        m_patterns = [
+            r'(\d+(?:\.\d+)?)m(?![\w])',   # Match 125m, 350m but not "model"
+            r'(\d+(?:\.\d+)?)-m\b',        # Match 125-m
+            r'(\d+(?:\.\d+)?)_m\b',        # Match 125_m
+            r'(\d+(?:\.\d+)?)\s*million',  # Match "125 million"
+        ]
+        
         for pattern in m_patterns:
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                return param_count * 0.002  # ~2MB per million parameters
+                return param_count * 0.004  # ~4MB per million parameters (more realistic)
         
-        # Decimal parameter counts
-        decimal_patterns = [r'(\d+\.\d+)b\b', r'(\d+\.\d+)-b\b']
-        for pattern in decimal_patterns:
+        # Look for size indicators in GB/MB
+        size_patterns = [
+            r'(\d+(?:\.\d+)?)gb',  # Match 3gb, 1.5gb
+            r'(\d+(?:\.\d+)?)g\b', # Match 3g
+        ]
+        
+        for pattern in size_patterns:
             match = re.search(pattern, model_name)
             if match:
-                param_count = float(match.group(1))
-                return param_count * 2.0
-
-        # Generic size indicators
-        if any(word in model_name for word in ["large", "xl"]):
-            return 2.0
-        elif any(word in model_name for word in ["base", "medium"]):
-            return 0.8
-        elif any(word in model_name for word in ["small", "mini", "tiny"]):
-            return 0.3
-        else:
-            return 1.0  # Default assumption
+                return float(match.group(1))
+        
+        mb_patterns = [
+            r'(\d+(?:\.\d+)?)mb',  # Match 500mb, 1500mb
+        ]
+        
+        for pattern in mb_patterns:
+            match = re.search(pattern, model_name)
+            if match:
+                return float(match.group(1)) / 1024  # Convert MB to GB
+        
+        # Model family/size heuristics (improved estimates)
+        size_keywords = {
+            ('xxl', 'ultra', 'giant'): 12.0,
+            ('xl', 'large'): 3.0,
+            ('base', 'medium'): 1.2,
+            ('small',): 0.5,
+            ('mini', 'tiny', 'nano'): 0.2,
+        }
+        
+        for keywords, size in size_keywords.items():
+            if any(keyword in model_name for keyword in keywords):
+                return size
+        
+        # Check for common model architectures
+        if any(arch in model_name for arch in ['gpt-3', 'gpt3']):
+            return 6.0  # GPT-3 style models are typically large
+        elif any(arch in model_name for arch in ['bert-large']):
+            return 1.3
+        elif any(arch in model_name for arch in ['bert-base']):
+            return 0.4
+        elif 'distil' in model_name:
+            return 0.3  # Distilled models are smaller
+        
+        # Default fallback
+        return 1.0
