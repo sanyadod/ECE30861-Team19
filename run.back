@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
-"""
-Executable entry point
-"""
 import sys
 import os
 import subprocess
 from pathlib import Path
 
-# Add the project root to Python path
+# add the project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 def main():
-    """Main entry point for the CLI."""
+    # main entry point for the CLI
     if len(sys.argv) < 2:
         print("Usage: ./run <command>", file=sys.stderr)
         print("Commands:", file=sys.stderr)
@@ -24,7 +20,7 @@ def main():
     command = sys.argv[1]
     
     if command == "install":
-        # Install dependencies in userland
+        # install dependencies in userland
         try:
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install", 
@@ -37,7 +33,7 @@ def main():
             sys.exit(1)
     
     elif command == "test":
-        # Run test suite
+        # run test suite
         try:
             from src.cli import run_tests
             run_tests()
@@ -49,7 +45,7 @@ def main():
             sys.exit(1)
     
     else:
-        # Treat as URL file path
+        # treat as URL file path
         url_file = Path(command)
         if not url_file.exists():
             print(f"Error: URL file '{url_file}' does not exist.", file=sys.stderr)
@@ -57,7 +53,7 @@ def main():
         
         try:
             from src.cli import _validate_environment, process_urls
-            # Validate environment variables at startup
+            # validate environment variables at startup
             _validate_environment()
             process_urls(str(url_file.absolute()))
         except ImportError as e:
