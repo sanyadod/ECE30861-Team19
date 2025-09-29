@@ -1,7 +1,3 @@
-"""
-Parallel metric computation and scoring system.
-"""
-
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -24,7 +20,7 @@ logger = get_logger()
 
 
 class MetricScorer:
-    """Handles parallel metric computation and scoring."""
+    # handles parallel metric computation and scoring
 
     def __init__(self, config_path: str = "config/weights.yaml"):
         self.config = self._load_config(config_path)
@@ -41,7 +37,7 @@ class MetricScorer:
         self.hf_api = HuggingFaceAPI()
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
-        """Load configuration from YAML file."""
+        # load configuration from YAML file
         try:
             config_file = Path(config_path)
             if not config_file.exists():
@@ -55,7 +51,7 @@ class MetricScorer:
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict[str, Any]:
-        """Return default configuration."""
+        # return default config
         return {
             "metric_weights": {
                 "ramp_up_time": 0.15,
@@ -76,25 +72,24 @@ class MetricScorer:
                 }
             },
         }
-
+    
+    # score a model using all metrics in parallel
     async def score_model(self, context: ModelContext) -> AuditResult:
-        """Score a model using all metrics in parallel."""
-        # Enrich context with API data
         await self._enrich_context(context)
 
-        # Compute all metrics in parallel
+        # compute all metrics in parallel
         with measure_time() as get_net_latency:
             metric_results = await self._compute_metrics_parallel(context)
 
-            # Calculate net score
+            # calculate net score
             net_score = self._calculate_net_score(metric_results)
 
-        # Build audit result - handle size score properly
+        # build audit result - handle size score properly
         size_score_result = metric_results.get("size_score")
         if isinstance(size_score_result, SizeScore):
             size_score_obj = size_score_result
         else:
-            # Fallback if size score format is unexpected
+            # fallback if size score format is unexpected
             size_score_obj = SizeScore(
                 raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
             )
@@ -123,23 +118,23 @@ class MetricScorer:
         )
 
     async def _enrich_context(self, context: ModelContext):
-        """Enrich context with data from APIs."""
+        # enrich context with data from APIs
         try:
-            # Get HF model info
+            # HF model info
             context.hf_info = await self.hf_api.get_model_info(context.model_url)
         except Exception as e:
             logger.error(f"Failed to get model info: {e}")
             context.hf_info = None
 
         try:
-            # Get README content
+            # README content
             context.readme_content = await self.hf_api.get_readme_content(context.model_url)
         except Exception as e:
             logger.error(f"Failed to get README content: {e}")
             context.readme_content = None
 
         try:
-            # Get model config
+            # model config
             context.config_data = await self.hf_api.get_model_config(context.model_url)
         except Exception as e:
             logger.error(f"Failed to get model config: {e}")
@@ -147,42 +142,42 @@ class MetricScorer:
 
         logger.info(f"Enriched context for {context.model_url.name}")
 
+    # compute all metrics in parallel
     async def _compute_metrics_parallel(self, context: ModelContext) -> Dict[str, Any]:
-        """Compute all metrics in parallel."""
         import asyncio
         
-        # Create tasks for all metrics
+        # create tasks for all metrics
         tasks = []
         for metric in self.metrics:
             task = metric.compute(context, self.config)
             tasks.append((metric.name, task))
 
-        # Execute all tasks concurrently using asyncio.gather for true parallelism
+        # execute all tasks concurrently using asyncio.gather
         results = {}
         
-        # Process each metric
+        # process each metric
         for metric_name, task in tasks:
             try:
                 result = await task
                 
                 if metric_name == "size_score":
-                    # Special handling for size score - it returns MetricResult with SizeScore
+                    # special handling for size score - it returns MetricResult with SizeScore
                     if isinstance(result.score, SizeScore):
                         results[metric_name] = result.score
                         results["size_score_latency"] = result.latency
                     else:
-                        # Fallback if unexpected format
+                        # fallback
                         results[metric_name] = SizeScore(
                             raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
                         )
                         results["size_score_latency"] = result.latency if hasattr(result, 'latency') else 0
                 else:
-                    # Normal MetricResult handling
+                    # normal MetricResult handling
                     results[metric_name] = result
                     
             except Exception as e:
                 logger.error(f"Error computing {metric_name}: {e}")
-                # Provide default result
+                # default result
                 if metric_name == "size_score":
                     results[metric_name] = SizeScore(
                         raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
@@ -194,7 +189,7 @@ class MetricScorer:
         return results
 
     def _calculate_net_score(self, metric_results: Dict[str, Any]) -> float:
-        """Calculate weighted net score from individual metrics."""
+        # calculate weighted net score from individual metrics
         weights = self.config.get("metric_weights", {})
 
         total_score = 0.0
@@ -202,11 +197,11 @@ class MetricScorer:
 
         for metric_name, result in metric_results.items():
             if metric_name.endswith("_latency"):
-                continue  # Skip latency fields
+                continue  # skip latency fields
 
             if metric_name == "size_score" and isinstance(result, SizeScore):
                 weight = weights.get("size_score", 0.0)
-                # Average across all devices
+                # average across all devices
                 avg_size_score = (
                     result.raspberry_pi + result.jetson_nano + result.desktop_pc + result.aws_server
                 ) / 4.0
@@ -219,7 +214,7 @@ class MetricScorer:
                 total_score += result.score * weight
                 total_weight += weight
 
-        # If total_weight is zero, return average of present scores
+        # return average of present scores
         if total_weight == 0.0:
             present_scores: List[float] = []
             for metric_name, result in metric_results.items():
@@ -228,7 +223,7 @@ class MetricScorer:
                 if isinstance(result, MetricResult):
                     present_scores.append(result.score)
             
-            # Include size_score as average across devices if present
+            # size_score as average across devices if present
             size_score = metric_results.get("size_score")
             if isinstance(size_score, SizeScore):
                 present_scores.append(
@@ -240,5 +235,4 @@ class MetricScorer:
         else:
             net_score = total_score / total_weight
 
-        # Clamp net_score to [0,1] as required by spec
         return max(0.0, min(1.0, net_score))

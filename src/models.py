@@ -1,7 +1,3 @@
-"""
-Data models
-"""
-
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -9,7 +5,6 @@ from pydantic import BaseModel, Field
 
 
 class URLCategory(str, Enum):
-    """Categories for URLs."""
 
     MODEL = "MODEL"
     DATASET = "DATASET"
@@ -17,7 +12,6 @@ class URLCategory(str, Enum):
 
 
 class ParsedURL(BaseModel):
-    """Represents a parsed URL with metadata."""
 
     url: str
     category: URLCategory
@@ -28,7 +22,7 @@ class ParsedURL(BaseModel):
 
 
 class SizeScore(BaseModel):
-    """Size score breakdown by device type."""
+    # size score breakdown by device type
 
     raspberry_pi: float = Field(..., ge=0.0, le=1.0)
     jetson_nano: float = Field(..., ge=0.0, le=1.0)
@@ -37,14 +31,14 @@ class SizeScore(BaseModel):
 
 
 class MetricResult(BaseModel):
-    """Result of a single metric calculation."""
+    # result of a single metric calculation
 
     score: float = Field(..., ge=0.0, le=1.0)
     latency: int = Field(..., ge=0)  # milliseconds
 
 
 class AuditResult(BaseModel):
-    """Complete audit result for a model (NDJSON output format)."""
+    # complete audit result for a model (NDJSON output format)
 
     name: str
     category: str = "MODEL"  # Always MODEL for output
@@ -77,13 +71,13 @@ class AuditResult(BaseModel):
 
 
 class ModelContext(BaseModel):
-    """Context for a model including associated datasets and code."""
+    # context for a model including associated datasets and code
 
     model_url: ParsedURL
     datasets: list[ParsedURL] = Field(default_factory=list)
     code_repos: list[ParsedURL] = Field(default_factory=list)
 
-    # Cached data from API calls
+    # cached data from API calls
     hf_info: Optional[Dict[str, Any]] = None
     readme_content: Optional[str] = None
     config_data: Optional[Dict[str, Any]] = None

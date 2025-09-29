@@ -1,7 +1,3 @@
-"""
-Git repository inspection
-"""
-
 import os
 import shutil
 import tempfile
@@ -21,7 +17,7 @@ logger = get_logger()
 
 
 class GitInspector:
-    """Git repository inspector using Dulwich."""
+    # git repository inspector using Dulwich
 
     def __init__(self, cache_dir: Optional[str] = None, timeout: int = 30):
         self.cache_dir = cache_dir or tempfile.mkdtemp(prefix="src_git_cache_")
@@ -29,11 +25,9 @@ class GitInspector:
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def clone_repo(self, repo_url: ParsedURL) -> Optional[str]:
-        """
-        Clone a repository to cache directory with timeout handling.
+        
+        # clone a repository to cache directory with timeout handling
 
-        Returns path to cloned repo or None if failed.
-        """
         if repo_url.platform != "github":
             return None
 
@@ -44,7 +38,7 @@ class GitInspector:
         )
         clone_path = os.path.join(self.cache_dir, repo_name)
 
-        # Check if already cloned
+        # check if already cloned
         if os.path.exists(clone_path):
             logger.debug(f"Using cached clone at {clone_path}")
             return clone_path
@@ -52,31 +46,31 @@ class GitInspector:
         try:
             logger.info(f"Cloning {repo_url.url} to {clone_path}")
             
-            # Use threading to implement timeout
+            # use threading to implement timeout
             result = [None]
             exception = [None]
             
             def clone_worker():
                 try:
-                    # Use smaller depth for faster cloning
+                    # use smaller depth for faster cloning
                     porcelain.clone(
                         repo_url.url, clone_path, depth=5
-                    )  # Much smaller depth for efficiency
+                    )  # much smaller depth for efficiency
                     result[0] = clone_path
                 except Exception as e:
                     exception[0] = e
             
-            # Start clone in separate thread
+            # start clone in separate thread
             thread = threading.Thread(target=clone_worker)
             thread.daemon = True
             thread.start()
             
-            # Wait for completion or timeout
+            # wait for completion or timeout
             thread.join(timeout=self.timeout)
             
             if thread.is_alive():
                 logger.warning(f"Timeout cloning {repo_url.url} after {self.timeout}s")
-                # Clean up partial clone
+                # clean up partial clone
                 if os.path.exists(clone_path):
                     shutil.rmtree(clone_path, ignore_errors=True)
                 return None
@@ -88,17 +82,14 @@ class GitInspector:
                 
         except Exception as e:
             logger.warning(f"Failed to clone {repo_url.url}: {e}")
-            # Clean up partial clone
+            # clean up partial clone
             if os.path.exists(clone_path):
                 shutil.rmtree(clone_path, ignore_errors=True)
             return None
 
     def analyze_repository(self, repo_path: str) -> Dict[str, Any]:
-        """
-        Analyze a cloned repository for various quality metrics.
+        # analyze a cloned repository for various quality metrics
 
-        Returns dict with analysis results.
-        """
         try:
             repo = Repo(repo_path)
         except NotGitRepository:
@@ -116,9 +107,9 @@ class GitInspector:
         return analysis
 
     def _analyze_commits(self, repo: Repo) -> Dict[str, Any]:
-        """Analyze commit history."""
+        # analyze commit history
         try:
-            commits = list(repo.get_walker(max_entries=100))  # Limit for performance
+            commits = list(repo.get_walker(max_entries=100))  # limit for performance
 
             if not commits:
                 return {
@@ -127,7 +118,7 @@ class GitInspector:
                     "avg_commit_frequency": 0,
                 }
 
-            # Get recent commits (last 90 days)
+            # get recent commits
             now = datetime.now(timezone.utc)
             recent_threshold = now.timestamp() - (90 * 24 * 60 * 60)  # 90 days ago
 
@@ -142,7 +133,7 @@ class GitInspector:
                 if commit_time >= recent_threshold:
                     recent_commits.append(commit)
 
-            # Calculate average commit frequency (commits per day)
+            # calculate average commit frequency
             if len(commit_dates) > 1:
                 time_span = max(commit_dates) - min(commit_dates)
                 days_span = max(1, time_span / (24 * 60 * 60))
@@ -166,7 +157,7 @@ class GitInspector:
             return {"total_commits": 0, "recent_commits": 0, "avg_commit_frequency": 0}
 
     def _analyze_contributors(self, repo: Repo) -> Dict[str, Any]:
-        """Analyze contributor diversity."""
+        # analyze contributor diversity
         try:
             commits = list(repo.get_walker(max_entries=100))
 
@@ -178,24 +169,24 @@ class GitInspector:
                 authors.add(commit.author.decode("utf-8", errors="ignore"))
                 committers.add(commit.committer.decode("utf-8", errors="ignore"))
 
-            # Simple bus factor calculation
+            # simple bus factor calculation
             total_commits = len(commits)
             unique_authors = len(authors)
 
             if total_commits == 0:
                 bus_factor_score = 0.0
             elif unique_authors == 1:
-                bus_factor_score = 0.3  # Low diversity
+                bus_factor_score = 0.3  # low diversity
             elif unique_authors < 3:
-                bus_factor_score = 0.5  # Medium diversity
+                bus_factor_score = 0.5  # medium diversity
             else:
-                bus_factor_score = 0.8  # High diversity
+                bus_factor_score = 0.8  # high diversity
 
             return {
                 "unique_authors": unique_authors,
                 "unique_committers": len(committers),
                 "bus_factor_score": bus_factor_score,
-                "authors": list(authors)[:10],  # Limit for privacy
+                "authors": list(authors)[:10],  # limit for privacy
             }
 
         except Exception as e:
@@ -207,7 +198,7 @@ class GitInspector:
             }
 
     def _analyze_files(self, repo_path: str) -> Dict[str, Any]:
-        """Analyze file structure and types."""
+        # analyze file structure and types
         try:
             repo_root = Path(repo_path)
 
@@ -219,7 +210,7 @@ class GitInspector:
                 or f.parent.name.lower() in ["test", "tests"]
             ]
 
-            # Count lines of code (simple version)
+            # count lines of code
             total_lines = 0
             for py_file in python_files:
                 try:
@@ -248,11 +239,11 @@ class GitInspector:
             }
 
     def _analyze_structure(self, repo_path: str) -> Dict[str, Any]:
-        """Analyze repository structure quality."""
+        # analyze repository structure quality
         try:
             repo_root = Path(repo_path)
 
-            # Check for standard files
+            # check for standard files
             has_readme = any(repo_root.glob("README.*"))
             has_license = any(repo_root.glob("LICENSE*")) or any(
                 repo_root.glob("LICENCE*")
@@ -286,11 +277,11 @@ class GitInspector:
             return {"structure_score": 0.0}
 
     def _analyze_documentation(self, repo_path: str) -> Dict[str, Any]:
-        """Analyze documentation quality."""
+        # analyze documentation quality
         try:
             repo_root = Path(repo_path)
 
-            # Find README content
+            # find README content
             readme_content = ""
             for readme_file in repo_root.glob("README.*"):
                 try:
@@ -300,7 +291,7 @@ class GitInspector:
                 except Exception:
                     continue
 
-            # Basic documentation analysis
+            # basic documentation analysis
             has_usage = "usage" in readme_content.lower()
             has_installation = "install" in readme_content.lower()
             has_examples = "example" in readme_content.lower()
@@ -324,7 +315,7 @@ class GitInspector:
             return {"documentation_score": 0.0, "readme_content": ""}
 
     def _empty_analysis(self) -> Dict[str, Any]:
-        """Return empty analysis structure."""
+        # return empty analysis structure
         return {
             "commit_analysis": {
                 "total_commits": 0,
@@ -341,7 +332,7 @@ class GitInspector:
         }
 
     def cleanup(self):
-        """Clean up cache directory."""
+        # clean up cache directory
         try:
             if os.path.exists(self.cache_dir):
                 shutil.rmtree(self.cache_dir)

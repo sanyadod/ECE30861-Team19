@@ -6,16 +6,13 @@ from .models import AuditResult
 
 
 class NDJSONOutputter:
-    """Handles NDJSON output to stdout."""
 
     def output_results(self, results: List[AuditResult]) -> None:
-        """Output results as NDJSON to stdout."""
+        # output results as NDJSON to stdout
         for result in results:
             self.output_single_result(result)
 
     def output_single_result(self, result: AuditResult) -> None:
-        """Output a single result as NDJSON to stdout."""
-        # Use exact field ordering as specified
         data = {
             "name": result.name,
             "category": result.category,

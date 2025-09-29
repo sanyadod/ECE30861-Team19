@@ -19,14 +19,14 @@ app = typer.Typer(help="Audit ML models with quality metrics")
 
 
 def _looks_like_github_pat(token: str) -> bool:
-    """Check if token looks like a valid GitHub Personal Access Token."""
+    # check if token looks like a valid GitHub Personal Access Token
     classic = re.compile(r"^gh[pousr]_[A-Za-z0-9]{20,}$")
     finegrained = re.compile(r"^github_pat_[A-Za-z0-9_]{20,}$")
     return bool(classic.match(token) or finegrained.match(token))
 
 
 def _validate_environment() -> None:
-    """Validate critical environment variables at startup."""
+    # calidate critical environment variables at startup
     # 1 - validate GitHub token
     gh_token = os.getenv("GITHUB_TOKEN")
     if gh_token is not None:
@@ -38,25 +38,24 @@ def _validate_environment() -> None:
     # logging_utils will exit(1) for invalid LOG_FILE
     setup_logging()
 
-
+# process URLs from file and output NDJSON results
 def process_urls(url_file: str) -> None:
-    """Process URLs from file and output NDJSON results."""
-    # Environment validation is handled by _validate_environment() in command handlers
+    # environment validation is handled by _validate_environment() in command handlers
     logger = get_logger()
 
     try:
-        # Read URLs from file - split on newlines only, handle empty lines
+        # read URLs from file - split on newlines only, handle empty lines
         with open(url_file, "r") as f:
             lines = f.readlines()
             
-        # Process each line as code, dataset, model triplets
+        # process each line as code, dataset, model triplets
         contexts = []
         for line in lines:
             line = line.strip()
-            if not line:  # Skip empty lines
+            if not line:  
                 continue
                 
-            # Split on commas - expect exactly 3 parts: code, dataset, model
+            # split on commas - expect exactly 3 parts: code, dataset, model
             parts = [url.strip() for url in line.split(',')]
             if len(parts) != 3:
                 logger.warning(f"Skipping malformed line (expected 3 parts): {line}")
@@ -64,21 +63,21 @@ def process_urls(url_file: str) -> None:
                 
             code_url, dataset_url, model_url = parts
             
-            # Parse each URL to get the appropriate category
+            # parse each URL to get the appropriate category
             from .urls import parse_url
             from .models import ModelContext
             
-            # Only parse non-empty URLs
+            # only parse non-empty URLs
             code_parsed = parse_url(code_url) if code_url else None
             dataset_parsed = parse_url(dataset_url) if dataset_url else None
             model_parsed = parse_url(model_url) if model_url else None
             
-            # Skip if model URL is empty (required)
+            # skip if model URL is empty
             if not model_url:
                 logger.warning(f"Skipping line with empty model URL: {line}")
                 continue
             
-            # Create model context with available resources
+            # create model context with available resources
             context = ModelContext(
                 model_url=model_parsed,
                 datasets=[dataset_parsed] if dataset_parsed else [],
@@ -92,7 +91,7 @@ def process_urls(url_file: str) -> None:
 
         logger.info(f"Processing {len(contexts)} models")
 
-        # Run async processing
+        # run async processing
         asyncio.run(_process_contexts_async(contexts))
 
     except FileNotFoundError:
@@ -104,12 +103,12 @@ def process_urls(url_file: str) -> None:
 
 
 async def _process_contexts_async(contexts: List) -> None:
-    """Async processing of model contexts."""
+    # async processing of model contexts
     scorer = MetricScorer()
     outputter = NDJSONOutputter()
     success_count = 0
 
-    # Process each model context
+    # process each model context
     for context in contexts:
         try:
             result = await scorer.score_model(context)
@@ -118,21 +117,19 @@ async def _process_contexts_async(contexts: List) -> None:
         except Exception as e:
             logger = get_logger()
             logger.error(f"Error scoring model {context.model_url.name}: {e}")
-            # Continue with next model rather than failing completely
 
-    # Exit with error if no models were successfully processed
+    # exit with error if no models were successfully processed
     if success_count == 0:
         logger.error("No models were successfully processed")
         sys.exit(1)
 
 
 def run_tests() -> None:
-    """Run the test suite and report results."""
-    # Validate environment variables at startup (consistent with CLI command)
+    # validate environment variables at startup (consistent with CLI command)
     _validate_environment()
     
     try:
-        # Run pytest with coverage
+        # run pytest with coverage
         result = subprocess.run(
             [
                 sys.executable,
@@ -148,15 +145,15 @@ def run_tests() -> None:
 
         output = result.stdout + result.stderr
 
-        # Parse test results
+        # parse test results
         lines = output.split("\n")
 
-        # Look for test summary line
+        # look for test summary line
         test_summary = ""
         coverage_summary = ""
 
         for line in lines:
-            # Look for test summary - handle different pytest output formats
+            # look for test summary - handle different pytest output formats
             if ("passed" in line and ("failed" in line or "error" in line)) or "test session starts" in line:
                 test_summary = line
             elif "TOTAL" in line and "%" in line:
@@ -166,7 +163,7 @@ def run_tests() -> None:
                         coverage_summary = part.replace("%", "")
                         break
 
-        # Parse numbers from pytest output
+        # parse numbers from pytest output
         passed = 0
         failed = 0
         total = 0
@@ -174,12 +171,12 @@ def run_tests() -> None:
         if test_summary:
             import re
             
-            # Try multiple patterns to match different pytest output formats
+            # try multiple patterns to match different pytest output formats
             passed_match = re.search(r"(\d+) passed", test_summary)
             failed_match = re.search(r"(\d+) failed", test_summary)
             error_match = re.search(r"(\d+) error", test_summary)
             
-            # Also try to find test counts in other formats
+            # try to find test counts in other formats
             if not passed_match:
                 passed_match = re.search(r"(\d+) passed", output)
             if not failed_match:
@@ -199,7 +196,7 @@ def run_tests() -> None:
             file=sys.stderr
         )
 
-        # Exit with error if tests failed OR coverage < 80%
+        # exit with error if tests failed OR coverage < 80%
         if result.returncode != 0 or coverage < 80:
             sys.exit(1)
         else:
@@ -212,8 +209,7 @@ def run_tests() -> None:
 
 @app.command()
 def install():
-    """Install dependencies in userland."""
-    # Validate environment variables at startup
+    # validate environment variables at startup
     _validate_environment()
 
     try:
@@ -228,16 +224,14 @@ def install():
 
 @app.command()
 def test():
-    """Run test suite."""
-    # Validate environment variables at startup
+    # validate environment variables at startup
     _validate_environment()
     run_tests()
 
 
 @app.command()
 def audit(url_file: str):
-    """Audit models from URL file."""
-    # Validate environment variables at startup
+    # validate environment variables at startup
     _validate_environment()
     process_urls(url_file)
 
