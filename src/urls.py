@@ -10,7 +10,7 @@ from .models import ModelContext, ParsedURL, URLCategory
 
 
 def parse_url(url: str) -> ParsedURL:
-    """Parse a URL and categorize it."""
+    #url parsing and categorizing
     parsed = urlparse(url.strip())
 
     if "huggingface.co" in parsed.netloc:
@@ -19,37 +19,38 @@ def parse_url(url: str) -> ParsedURL:
         return _parse_github_url(url, parsed)
         
     else:
-        # Unknown platform, make best guess
+        # for unknown platforms, setting best guess to Dataset
         return ParsedURL(
             url=url,
-            category=URLCategory.DATASET,  # Default assumption
+            category=URLCategory.DATASET,  #defaults into
             name=url.split("/")[-1] or url,
             platform="unknown",
         )
 
 
 def _parse_huggingface_url(url: str, parsed) -> ParsedURL:
-    """Parse Hugging Face URLs."""
+    #parse hugging face urls
     path_parts = [part for part in parsed.path.split("/") if part]
 
     if not path_parts:
         raise ValueError(f"Invalid Hugging Face URL: {url}")
 
-    # Determine if it's a dataset or model
+    #dataset route is /datasets/<owner>/<repo>
     if len(path_parts) >= 2 and path_parts[0] == "datasets":
         category = URLCategory.DATASET
         owner = path_parts[1] if len(path_parts) > 1 else None
         repo = path_parts[2] if len(path_parts) > 2 else None
-        # For datasets, set name as "owner/repo" when both present
+        #set name as "owner/repo" when both exist
         if owner and repo:
             name = f"{owner}/{repo}"
         else:
             name = repo if repo else (url.split("/")[-1])
     else:
+        #otherwise treat as model
         category = URLCategory.MODEL
         owner = path_parts[0] if len(path_parts) > 0 else None
         repo = path_parts[1] if len(path_parts) > 1 else None
-        # For models, use only the repo name
+        #use only the repo name for models if it exists
         name = repo if repo else (url.split("/")[-1])
 
     return ParsedURL(
@@ -63,10 +64,10 @@ def _parse_huggingface_url(url: str, parsed) -> ParsedURL:
 
 
 def _parse_github_url(url: str, parsed) -> ParsedURL:
-    """Parse GitHub URLs."""
     path_parts = [part for part in parsed.path.split("/") if part]
 
     if len(path_parts) < 2:
+        #requires atleast owner/repo
         raise ValueError(f"Invalid GitHub URL: {url}")
 
     owner = path_parts[0]
@@ -92,7 +93,7 @@ def build_model_contexts(urls: List[str]) -> List[ModelContext]:
     parsed_urls = [parse_url(url) for url in urls]
     contexts: List[ModelContext] = []
 
-    # Track accumulated datasets and code
+    #accumulate datasets and code
     pending_datasets: List[ParsedURL] = []
     pending_code: List[ParsedURL] = []
 
@@ -102,7 +103,7 @@ def build_model_contexts(urls: List[str]) -> List[ModelContext]:
         elif parsed_url.category == URLCategory.CODE:
             pending_code.append(parsed_url)
         elif parsed_url.category == URLCategory.MODEL:
-            # Create model context with accumulated resources
+            #if we hit a model, attach whatever we have
             context = ModelContext(
                 model_url=parsed_url,
                 datasets=_find_relevant_resources(parsed_url, pending_datasets),
@@ -110,7 +111,7 @@ def build_model_contexts(urls: List[str]) -> List[ModelContext]:
             )
             contexts.append(context)
 
-            # Don't clear pending resources - they might be relevant to multiple models
+            #don't clear pending resources, they might apply to multiple models
 
     return contexts
 
@@ -118,9 +119,7 @@ def build_model_contexts(urls: List[str]) -> List[ModelContext]:
 def _find_relevant_resources(
     model_url: ParsedURL, resources: List[ParsedURL]
 ) -> List[ParsedURL]:
-    """
-    Find resources that are relevant to a model based on name similarity.
-    """
+    #finding resources based on name similarity
     if not resources:
         return []
 
@@ -130,13 +129,13 @@ def _find_relevant_resources(
     for resource in resources:
         resource_name_parts = set(_extract_name_parts(resource.name))
 
-        # Check for name overlap or ownership match
+        #overlap on tokens QR same owner = good link
         if model_name_parts & resource_name_parts or model_url.owner == resource.owner:
             relevant.append(resource)
 
-    # If no specific matches found, include all recent resources as potentially relevant
+    #fallback if no matches found
     if not relevant and resources:
-        # Include the most recent resources (assuming order in file matters)
+        #include the most recent resources then
         relevant = resources[-2:] if len(resources) >= 2 else resources
 
     return relevant
@@ -144,6 +143,6 @@ def _find_relevant_resources(
 
 def _extract_name_parts(name: str) -> List[str]:
     """Extract meaningful parts from a name for comparison."""
-    # Split on common separators and extract alphabetic parts
+    #split on common separators and extract alphabetic parts
     parts = re.split(r"[/_\-\s.]+", name.lower())
     return [part for part in parts if part and part.isalpha() and len(part) > 2]
