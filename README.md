@@ -1,8 +1,8 @@
 # ECE30861-Team19
-ECE 30861
-Sanya Dod, 
-Spoorthi Koppula,
-Romita Pakrasi, 
+## Team
+Sanya Dod
+Spoorthi Koppula
+Romita Pakrasi
 Suhani Mathur
 
 ## Overview
@@ -30,12 +30,12 @@ The system is a comprehensive machine learning model auditing platform that eval
 
 ## Structure
 ```bash
-├── src/                # main code: metrics, utilities, size estimation
+├── src/                # main code: metrics, utilities
 ├── tests/              # unit tests and integration tests
 ├── requirements.txt    # Python dependencies
 ├── run                 # executable wrapper / entrypoint
-├── sample_urls.txt     # example model URLs for evaluation
-└── README.md            # this file
+├── sample_urls.txt     # example model URLs for testing
+└── README.md           
 ```
 
 ## Installation
