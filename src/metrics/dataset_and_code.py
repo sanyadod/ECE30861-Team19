@@ -6,7 +6,7 @@ from .base import BaseMetric
 
 
 class DatasetAndCodeScoreMetric(BaseMetric):
-    """Metric for evaluating linked datasets and code quality."""
+    # metric for evaluating linked datasets and code quality
 
     @property
     def name(self) -> str:
@@ -15,7 +15,7 @@ class DatasetAndCodeScoreMetric(BaseMetric):
     async def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
-        """Compute dataset and code linkage score."""
+        # compute dataset and code linkage score
         with measure_time() as get_latency:
             score = await self._calculate_dataset_code_score(context, config)
 
@@ -24,11 +24,8 @@ class DatasetAndCodeScoreMetric(BaseMetric):
     async def _calculate_dataset_code_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-        """Calculate score based on dataset link and example train/test code.
+        # calculate score based on dataset link and example train/test code
 
-        The metric gives 1.0 when both are present, 0.5 when only one,
-        and 0.1 when neither is present.
-        """
         has_dataset_link = False
         has_example_code = False
 

@@ -6,7 +6,7 @@ from ..utils import measure_time
 from .base import BaseMetric
 
 class CodeQualityMetric(BaseMetric):
-    """Metric for evaluating quality of linked code repositories."""
+    # metric for evaluating quality of linked code repositories
 
     @property
     def name(self) -> str:
@@ -24,7 +24,7 @@ class CodeQualityMetric(BaseMetric):
     async def _calculate_code_quality_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-        """Calculate code quality using lints, tests folder, and CI config."""
+        # calculate code quality using lints, tests folder, and CI config
         if not context.code_repos:
             return 0.4
 
@@ -56,7 +56,7 @@ class CodeQualityMetric(BaseMetric):
     def _analyze_code_quality_by_spec(
         self, repo_path: str, inspector: GitInspector
     ) -> float:
-        """Analyze code quality using existing static-analysis hooks."""
+        # analyze code quality using existing static-analysis hooks
         import glob
         import os
         import subprocess
@@ -177,7 +177,7 @@ class CodeQualityMetric(BaseMetric):
     def _analyze_code_repository(
         self, repo_path: str, inspector: GitInspector, thresholds: Dict[str, Any]
     ) -> float:
-        """Analyze a code repository for quality indicators."""
+        # analyze code repository for quality indicators
         analysis = inspector.analyze_repository(repo_path)
 
         score = 0.0
@@ -239,7 +239,7 @@ class CodeQualityMetric(BaseMetric):
         return score
 
     def _calculate_commit_quality_score(self, commit_analysis: Dict[str, Any]) -> float:
-        """Calculate score based on commit history quality."""
+        # calculate score based on commit history quality
         score = 0.0
 
         total_commits = commit_analysis.get("total_commits", 0)
