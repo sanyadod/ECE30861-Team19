@@ -1,7 +1,3 @@
-"""
-Hugging Face Hub API integration.
-"""
-
 import json
 import os
 from typing import Any, Dict, Optional
@@ -16,7 +12,7 @@ logger = get_logger()
 
 
 class HuggingFaceAPI:
-    """Wrapper for Hugging Face Hub API operations."""
+    # wrapper for Hugging Face Hub API operations
 
     def __init__(self):
         self.api = HfApi()
@@ -24,12 +20,12 @@ class HuggingFaceAPI:
         self.timeout = 30.0
 
     async def get_model_info(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
-        """Get comprehensive model information from HF Hub API."""
+        # get comprehensive model information from HF Hub API
         if model_url.platform != "huggingface" or not model_url.repo:
             return None
 
         try:
-            # Get basic model info
+            # get basic model info
             repo_id = (
                 f"{model_url.owner}/{model_url.repo}"
                 if model_url.owner
@@ -37,7 +33,7 @@ class HuggingFaceAPI:
             )
             model_info = self.api.model_info(repo_id, token=self.token)
 
-            # Convert to dict and add additional metrics
+            # convert to dict and add additional metrics
             info_dict = {
                 "id": model_info.id,
                 "author": getattr(model_info, "author", None),
@@ -51,7 +47,7 @@ class HuggingFaceAPI:
                 "model_index": getattr(model_info, "model_index", None),
             }
 
-            # Get file information
+            # get file information
             try:
                 files = list_repo_files(repo_id, token=self.token)
                 info_dict["files"] = files
@@ -73,7 +69,7 @@ class HuggingFaceAPI:
     async def get_dataset_info(
         self, dataset_url: ParsedURL
     ) -> Optional[Dict[str, Any]]:
-        """Get dataset information from HF Hub API."""
+        # get dataset information from HF Hub API
         if dataset_url.platform != "huggingface" or not dataset_url.repo:
             return None
 
@@ -103,7 +99,7 @@ class HuggingFaceAPI:
     async def download_file(
         self, repo_id: str, filename: str, is_dataset: bool = False
     ) -> Optional[str]:
-        """Download a specific file from a repository."""
+        # download a specific file from a repository
         try:
             file_path = hf_hub_download(
                 repo_id=repo_id,
@@ -123,7 +119,7 @@ class HuggingFaceAPI:
             return None
 
     async def get_readme_content(self, parsed_url: ParsedURL) -> Optional[str]:
-        """Get README content from a repository."""
+        # get README content from a repository
         if parsed_url.platform != "huggingface" or not parsed_url.repo:
             return None
 
@@ -134,7 +130,7 @@ class HuggingFaceAPI:
         )
         is_dataset = parsed_url.category == URLCategory.DATASET
 
-        # Try different README file names
+        # try different README file names
         readme_files = ["README.md", "readme.md", "README.txt", "readme.txt"]
 
         for readme_file in readme_files:
@@ -145,7 +141,7 @@ class HuggingFaceAPI:
         return None
 
     async def get_model_config(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
-        """Get model configuration files."""
+        # get model configuration files
         if model_url.platform != "huggingface" or not model_url.repo:
             return None
 

@@ -1,7 +1,3 @@
-"""
-Data models  used across parsing and scoring
-"""
-
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -9,7 +5,6 @@ from pydantic import BaseModel, Field
 
 
 class URLCategory(str, Enum):
-    #coarse buckets, add more if we treat HF scpaes, etc differently
 
     MODEL = "MODEL"
     DATASET = "DATASET"
@@ -17,7 +12,6 @@ class URLCategory(str, Enum):
 
 
 class ParsedURL(BaseModel):
- #minimal information needed to reason about a URL without hitting the network
 
     url: str
     category: URLCategory
@@ -28,7 +22,7 @@ class ParsedURL(BaseModel):
 
 
 class SizeScore(BaseModel):
-    #per device, the normalized scores in the format of [0,1]
+    # size score breakdown by device type
 
     raspberry_pi: float = Field(..., ge=0.0, le=1.0)
     jetson_nano: float = Field(..., ge=0.0, le=1.0)
@@ -37,14 +31,14 @@ class SizeScore(BaseModel):
 
 
 class MetricResult(BaseModel):
-    #single metric output, most of them return a scalar in [0,1]
+    # result of a single metric calculation
 
     score: float = Field(..., ge=0.0, le=1.0)
     latency: int = Field(..., ge=0)  # milliseconds unit
 
 
 class AuditResult(BaseModel):
-    #it is flattened view for NDJSON, keeping the normalized numbers 
+    # complete audit result for a model (NDJSON output format)
 
     name: str
     category: str = "MODEL"  # Always MODEL for output is expected 
@@ -77,13 +71,13 @@ class AuditResult(BaseModel):
 
 
 class ModelContext(BaseModel):
-    #all we know about the model + related assets, no netwrok required here 
+    # context for a model including associated datasets and code
 
     model_url: ParsedURL
     datasets: list[ParsedURL] = Field(default_factory=list)
     code_repos: list[ParsedURL] = Field(default_factory=list)
 
-    # Cached data from API calls
+    # cached data from API calls
     hf_info: Optional[Dict[str, Any]] = None
     readme_content: Optional[str] = None
     config_data: Optional[Dict[str, Any]] = None
