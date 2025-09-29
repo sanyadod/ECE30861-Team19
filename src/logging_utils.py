@@ -8,27 +8,26 @@ import sys
 
 
 def setup_logging() -> logging.Logger:
-    """Set up logging based on environment variables."""
+    #setting up based on variables
     logger = logging.getLogger("src")
 
-    # Clear any existing handlers
+    #clearing existing handlers
     logger.handlers.clear()
 
-    # Validate LOG_FILE first, regardless of log level
+    #validating log file first
     log_file = os.getenv("LOG_FILE")
     if log_file:
         try:
-            # Validate we can write to the file path eagerly
-            # This will raise if directories don't exist or permissions are insufficient
+            # sanity check, if it can be opened for read or write
             with open(log_file, "r+"):
                 pass
         except Exception as e:
-            # Per specification: invalid log file path must cause startup failure
-            # Use logger if available, otherwise stderr
+            #spec says: invalid path should hard exit
             try:
                 logger = get_logger()
                 logger.critical(f"Error: Invalid LOG_FILE path '{log_file}': {e}")
             except:
+                #fallback if logger isn't configured yet
                 print(f"Error: Invalid LOG_FILE path '{log_file}': {e}", file=sys.stderr)
             sys.exit(1)
 
@@ -45,9 +44,8 @@ def setup_logging() -> logging.Logger:
             print(f"Error: LOG_LEVEL must be an integer, got '{log_level_env}'", file=sys.stderr)
         sys.exit(1)
 
-    # Validate LOG_LEVEL is in {0,1,2}
+    #hard bounds check
     if log_level_num not in {0, 1, 2}:
-        # Use logger if available, otherwise stderr
         try:
             logger = get_logger()
             logger.critical(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}")
@@ -55,16 +53,16 @@ def setup_logging() -> logging.Logger:
             print(f"Error: LOG_LEVEL must be 0, 1, or 2, got {log_level_num}", file=sys.stderr)
         sys.exit(1)
 
-    # Map to logging levels
+    #map to actual logging levels
     if log_level_num == 0:
-        logger.setLevel(logging.CRITICAL + 1)  # Effectively silent
+        logger.setLevel(logging.CRITICAL + 1)  #muting everything
         return logger
     elif log_level_num == 1:
         logger.setLevel(logging.INFO)
     else:  # log_level_num == 2
         logger.setLevel(logging.DEBUG)
 
-    # Create formatter
+    #standard format
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
