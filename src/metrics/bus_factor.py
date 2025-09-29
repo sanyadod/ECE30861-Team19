@@ -25,7 +25,10 @@ class BusFactorMetric(BaseMetric):
     async def _calculate_bus_factor_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-        # formula: ``min(1.0, contributors / 5.0)``.
+        """Calculate bus factor from unique commit authors.
+
+        Formula: ``min(1.0, contributors / 5.0)``.
+        """
         contributors = 0
 
         # get contributor count from git repository analysis

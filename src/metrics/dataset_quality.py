@@ -7,7 +7,7 @@ from .base import BaseMetric
 
 
 class DatasetQualityMetric(BaseMetric):
-    # metric for evaluating quality of linked datasets
+    """Metric for evaluating quality of linked datasets."""
 
     @property
     def name(self) -> str:
@@ -16,7 +16,7 @@ class DatasetQualityMetric(BaseMetric):
     async def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
-        # compute dataset quality score
+        """Compute dataset quality score."""
         with measure_time() as get_latency:
             score = await self._calculate_dataset_quality_score(context, config)
 
@@ -25,8 +25,12 @@ class DatasetQualityMetric(BaseMetric):
     async def _calculate_dataset_quality_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-    
-        # if no datasets are linked, check README for dataset information
+        """Calculate dataset quality.
+
+        Score = (#fields_filled / 4) for description, size/#samples, license,
+        and benchmark references.
+        """
+        #iIf no datasets are linked, check README for dataset information
         if not context.datasets:
             if context.readme_content:
                 return self._analyze_readme_dataset_quality(context.readme_content)
@@ -58,8 +62,7 @@ class DatasetQualityMetric(BaseMetric):
     async def _analyze_hf_dataset_quality(
         self, dataset_url, hf_api: HuggingFaceAPI
     ) -> float:
-        # analyze HF dataset for description, size/#samples, license, benchmarks
-
+        """Analyze a HF dataset for description, size/#samples, license, benchmarks."""
         # get dataset README
         readme_content = await hf_api.get_readme_content(dataset_url)
         if not readme_content:
@@ -71,13 +74,13 @@ class DatasetQualityMetric(BaseMetric):
         return self._analyze_dataset_content(readme_content, dataset_info)
 
     def _analyze_readme_dataset_quality(self, readme_content: str) -> float:
-        # analyze README content for dataset quality indicators
+        """Analyze README content for dataset quality indicators."""
         return self._analyze_dataset_content(readme_content, None)
 
     def _analyze_dataset_content(
         self, readme_content: str, dataset_info: Optional[Dict[str, Any]] = None
     ) -> float:
-        # analyze content for specific dataset quality fields
+        """Analyze content for 4 specific dataset quality fields."""
         score = 0.0
         readme_lower = readme_content.lower()
 
