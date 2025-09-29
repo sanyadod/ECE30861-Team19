@@ -23,6 +23,7 @@ def setup_logging() -> logging.Logger:
                 logger = get_logger()
                 logger.critical(f"Error: Invalid LOG_FILE path '{log_file}': {e}")
             except:
+                #fallback if logger isn't configured yet
                 print(f"Error: Invalid LOG_FILE path '{log_file}': {e}", file=sys.stderr)
             sys.exit(1)
 

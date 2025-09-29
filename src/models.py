@@ -34,14 +34,14 @@ class MetricResult(BaseModel):
     # result of a single metric calculation
 
     score: float = Field(..., ge=0.0, le=1.0)
-    latency: int = Field(..., ge=0)  # milliseconds
+    latency: int = Field(..., ge=0)  # milliseconds unit
 
 
 class AuditResult(BaseModel):
     # complete audit result for a model (NDJSON output format)
 
     name: str
-    category: str = "MODEL"  # Always MODEL for output
+    category: str = "MODEL"  # Always MODEL for output is expected 
     net_score: float = Field(..., ge=0.0, le=1.0)
     net_score_latency: int = Field(..., ge=0)
 

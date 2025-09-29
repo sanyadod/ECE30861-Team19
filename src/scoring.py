@@ -22,9 +22,10 @@ logger = get_logger()
 class MetricScorer:
     # handles parallel metric computation and scoring
 
-    def __init__(self, config_path: str = "config/weights.yaml"):
-        self.config = self._load_config(config_path)
+    def __init__(self, config_path: str = "config/weights.yaml"): 
+        self.config = self._load_config(config_path) #loads weights+ thresholds
         self.metrics = [
+            #grouping order here
             RampUpTimeMetric(),
             BusFactorMetric(),
             PerformanceClaimsMetric(),
@@ -34,7 +35,7 @@ class MetricScorer:
             DatasetQualityMetric(),
             CodeQualityMetric(),
         ]
-        self.hf_api = HuggingFaceAPI()
+        self.hf_api = HuggingFaceAPI() #hf client for enhancing
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         # load configuration from YAML file
@@ -42,13 +43,13 @@ class MetricScorer:
             config_file = Path(config_path)
             if not config_file.exists():
                 logger.warning(f"Config file {config_path} not found, using defaults")
-                return self._get_default_config()
+                return self._get_default_config() #fallsback if file might be missing
 
             with open(config_file, "r") as f:
-                return yaml.safe_load(f)
+                return yaml.safe_load(f) #simple yaml -> dict
         except Exception as e:
             logger.error(f"Error loading config: {e}")
-            return self._get_default_config()
+            return self._get_default_config() #fallback on parse errors
 
     def _get_default_config(self) -> Dict[str, Any]:
         # return default config
@@ -94,6 +95,7 @@ class MetricScorer:
                 raspberry_pi=0.0, jetson_nano=0.0, desktop_pc=0.0, aws_server=0.0
             )
 
+        #assemble flat audit record 
         return AuditResult(
             name=context.model_url.name,
             category="MODEL",
@@ -140,13 +142,14 @@ class MetricScorer:
             logger.error(f"Failed to get model config: {e}")
             context.config_data = None
 
-        logger.info(f"Enriched context for {context.model_url.name}")
+        logger.info(f"Enriched context for {context.model_url.name}") #sanity log
 
     # compute all metrics in parallel
     async def _compute_metrics_parallel(self, context: ModelContext) -> Dict[str, Any]:
         import asyncio
         
         # create tasks for all metrics
+        #creating routine tasks for all metrics
         tasks = []
         for metric in self.metrics:
             task = metric.compute(context, self.config)
@@ -158,7 +161,7 @@ class MetricScorer:
         # process each metric
         for metric_name, task in tasks:
             try:
-                result = await task
+                result = await task #run metric
                 
                 if metric_name == "size_score":
                     # special handling for size score - it returns MetricResult with SizeScore

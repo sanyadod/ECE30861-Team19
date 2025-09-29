@@ -42,6 +42,7 @@ def _parse_huggingface_url(url: str, parsed) -> ParsedURL:
         else:
             name = repo if repo else (url.split("/")[-1])
     else:
+        #otherwise treat as model
         category = URLCategory.MODEL
         owner = path_parts[0] if len(path_parts) > 0 else None
         repo = path_parts[1] if len(path_parts) > 1 else None
@@ -63,6 +64,7 @@ def _parse_github_url(url: str, parsed) -> ParsedURL:
     path_parts = [part for part in parsed.path.split("/") if part]
 
     if len(path_parts) < 2:
+        #requires atleast owner/repo
         raise ValueError(f"Invalid GitHub URL: {url}")
 
     owner = path_parts[0]

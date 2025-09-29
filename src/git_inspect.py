@@ -87,6 +87,8 @@ class GitInspector:
                 shutil.rmtree(clone_path, ignore_errors=True)
             return None
 
+
+
     def analyze_repository(self, repo_path: str) -> Dict[str, Any]:
         # analyze a cloned repository for various quality metrics
 
@@ -153,6 +155,7 @@ class GitInspector:
             }
 
         except Exception as e:
+            #keeping the rest of the analysis alive even if this part fails
             logger.warning(f"Error analyzing commits: {e}")
             return {"total_commits": 0, "recent_commits": 0, "avg_commit_frequency": 0}
 
@@ -166,6 +169,7 @@ class GitInspector:
 
             for entry in commits:
                 commit = entry.commit
+                #author/commiteer are bytes
                 authors.add(commit.author.decode("utf-8", errors="ignore"))
                 committers.add(commit.committer.decode("utf-8", errors="ignore"))
 
@@ -202,6 +206,8 @@ class GitInspector:
         try:
             repo_root = Path(repo_path)
 
+            #consider any 8.py as code, tests are identified by name or parent folder
+
             python_files = list(repo_root.glob("**/*.py"))
             test_files = [
                 f
@@ -217,6 +223,7 @@ class GitInspector:
                     with open(py_file, "r", encoding="utf-8", errors="ignore") as f:
                         total_lines += len(f.readlines())
                 except Exception:
+                    #ignore unreadable files 
                     continue
 
             return {
@@ -258,6 +265,7 @@ class GitInspector:
                 repo_root / ".gitlab-ci.yml"
             ).exists()
 
+#simple equal-weight score, eadsy to extend with weights if needed
             structure_score = (
                 sum([has_readme, has_license, has_requirements, has_setup, has_ci])
                 / 5.0
@@ -307,7 +315,7 @@ class GitInspector:
                 "has_installation_section": has_installation,
                 "has_examples": has_examples,
                 "documentation_score": doc_score,
-                "readme_content": readme_content[:2000],  # Limit size
+                "readme_content": readme_content[:2000],  # Limit size to keep small
             }
 
         except Exception as e:
