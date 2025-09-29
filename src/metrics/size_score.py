@@ -15,11 +15,11 @@ class SizeScoreMetric(BaseMetric):
     async def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
-        """Compute size score for different hardware targets."""
+        # compute size score for different hardware targets
         with measure_time() as get_latency:
             size_score = await self._calculate_size_scores(context, config)
         
-        # Return MetricResult with SizeScore object as the score
+        # return MetricResult with SizeScore object as the score
         return MetricResult(
             score=size_score,
             latency=get_latency()
@@ -28,10 +28,10 @@ class SizeScoreMetric(BaseMetric):
     async def _calculate_size_scores(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> SizeScore:
-        """Estimate model size from various sources."""
+        # estimate model size from various sources
         estimated_size_gb = await self._estimate_model_size(context)
 
-        # Get thresholds from config, with fallbacks
+        # get thresholds from config, with fallbacks
         size_limits = config.get("thresholds", {}).get("size_limits", {})
         softness = float(config.get("thresholds",{}).get("softness", 1.2))
         
@@ -48,12 +48,12 @@ class SizeScoreMetric(BaseMetric):
         )
 
     def _calculate_device_score(self, model_size_gb: float, limit_gb: float) -> float:
-        """Calculate normalized score versus device limit.
+        """ calculate normalized score versus device limit:
         
-        - <= limit → 1.0
-        - <= 2x limit → 0.8  
-        - <= 5x limit → 0.5
-        - > 5x limit → 0.0
+        - <= limit - 1.0
+        - <= 2x limit - 0.8  
+        - <= 5x limit - 0.5
+        - > 5x limit - 0.0
         """
         if limit_gb <= 0:
             return 0.0
@@ -67,9 +67,9 @@ class SizeScoreMetric(BaseMetric):
     async def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
         
-        # First, try to use the existing utility function
+        # try using existing utility function
         try:
-            # Try different ways to get text for the utility function
+            # different ways to get text for the utility function
             text_to_analyze = ""
             if hasattr(context, 'model_url') and context.model_url:
                 if hasattr(context.model_url, 'name'):
@@ -81,33 +81,33 @@ class SizeScoreMetric(BaseMetric):
                 if size_from_text and size_from_text > 0:
                     return size_from_text
         except Exception:
-            pass  # Fall back to manual parsing
+            pass  # fall back to manual parsing
         
-        # Try HuggingFace file information
+        # try HuggingFace file info
         if hasattr(context, 'hf_info') and context.hf_info and context.hf_info.get("files"):
             total_size_gb = 0.0
             model_files = 0
             
             for file_path in context.hf_info["files"]:
                 if file_path.endswith((".bin", ".safetensors")):
-                    # Check if we have actual file size information
+                    # check for file size info 
                     file_info = context.hf_info.get("file_info", {}).get(file_path, {})
                     if "size" in file_info:
                         total_size_gb += file_info["size"] / (1024**3)
                     else:
-                        # Conservative estimate for model files
+                        # conservative estimate for model files
                         total_size_gb += 0.25
                     model_files += 1
                 elif file_path.endswith(".h5"):
                     total_size_gb += 0.8
                     model_files += 1
                 elif file_path.endswith((".json", ".txt", ".md", ".py", ".gitignore")):
-                    total_size_gb += 0.001  # Config files
+                    total_size_gb += 0.001  # config files
                     
             if model_files > 0:
                 return max(total_size_gb, 0.01)
         
-        # Extract from model name/URL
+        # extract from model name/URL
         model_name = ""
         if hasattr(context, 'model_url') and context.model_url:
             if hasattr(context.model_url, 'name'):
@@ -116,23 +116,23 @@ class SizeScoreMetric(BaseMetric):
                 model_name = str(context.model_url).lower()
         
         if not model_name:
-            return 0.5  # Default fallback
+            return 0.5  # default fallback
         
-        # Hardcoded model size mappings for known test models
+        # model size mappings for bert, whisper, audience, gemma
         model_size_mappings = {
             'bert-base-uncased': 0.44,    # ~110M parameters
             'whisper-tiny': 0.075,        # ~39M parameters  
-            'audience-classifier': 0.1,   # Estimated small classifier
+            'audience-classifier': 0.1,   # estimated small classifier
             'gemma-3-270m': 0.54, 
         }
         
-        # Check for exact model matches first
+        # check for exact model matches first
         model_name_clean = model_name.lower().replace('_', '-').replace(' ', '-')
         for model_key, size in model_size_mappings.items():
             if model_key in model_name_clean:
                 return size
         
-        # Parameter count patterns - billion parameters
+        # billion parameters
         b_patterns = [
             r'(\d+(?:\.\d+)?)b(?:-|_|$|\s)',  # 7b, 1.3b followed by delimiter or end
             r'(\d+(?:\.\d+)?)-?billion',      # 7billion, 7-billion
@@ -142,10 +142,10 @@ class SizeScoreMetric(BaseMetric):
             match = re.search(pattern, model_name)
             if match:
                 param_count = float(match.group(1))
-                # Standard estimate: 2GB per billion parameters for 16-bit models
+                #sStandard estimate: 2GB per billion parameters for 16-bit models
                 return param_count * 2.0
         
-        # Parameter count patterns - million parameters  
+        # million parameters  
         m_patterns = [
             r'(\d+(?:\.\d+)?)m(?:-|_|$|\s)',  # 125m, 350m
             r'(\d+(?:\.\d+)?)-?million',      # 125million, 125-million
@@ -158,7 +158,7 @@ class SizeScoreMetric(BaseMetric):
                 # 2MB per million parameters
                 return param_count * 0.002
         
-        # Direct size patterns
+        # direct size patterns
         gb_patterns = [
             r'(\d+(?:\.\d+)?)gb',
             r'(\d+(?:\.\d+)?)g(?:-|_|$|\s)',
@@ -169,14 +169,14 @@ class SizeScoreMetric(BaseMetric):
             if match:
                 return float(match.group(1))
         
-        # Model family/architecture-specific heuristics (more accurate estimates)
+        # model family/architecture-specific heuristics -more accurate estimates
         architecture_sizes = {
             # BERT family
             ('bert-large',): 1.3,        # ~340M params
             ('bert-base',): 0.44,        # ~110M params  
             ('distilbert',): 0.26,       # ~66M params
             
-            # Whisper family
+            # whisper family
             ('whisper-tiny',): 0.075,    # ~39M params
             ('whisper-small',): 0.24,    # ~61M params
             ('whisper-base',): 0.29,     # ~74M params
@@ -193,7 +193,7 @@ class SizeScoreMetric(BaseMetric):
             ('gpt2-medium',): 1.4,       # ~345M params
             ('gpt2-large',): 3.2,        # ~774M params
             
-            # Generic size indicators (fallbacks)
+            # generic size indicators (fallbacks)
             ('mini', 'tiny', 'nano'): 0.1,
             ('small',): 0.3,
             ('base', 'medium'): 0.8,
@@ -206,5 +206,5 @@ class SizeScoreMetric(BaseMetric):
             if any(keyword in model_name for keyword in keywords):
                 return size
         
-        # Default fallback
+        # default fallback
         return 0.5
